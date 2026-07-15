@@ -1,32 +1,14 @@
 import type { Env } from '../index';
+import { getSupabaseClient } from '../index';
 import { verifyAuth } from '../middleware/auth';
-
-// 将 ArrayBuffer 转为 base64 字符串
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-// 将 base64 字符串转为 Uint8Array
-function base64ToUint8Array(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
 
 export async function handlePhotos(request: Request, env: Env) {
   const user = await verifyAuth(request, env);
-  if (!user) return Response.json({ error: '请先登录' }, { status: 401 });
+  if (!user) return new Response(JSON.stringify({ error: '请先登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
 
   const url = new URL(request.url);
   const method = request.method;
+  const supabase = getSupabaseClient(env);
 
   // ====== 上传照片 POST /api/photos/upload ======
   if (url.pathname === '/api/photos/upload' && method === 'POST') {
@@ -39,133 +21,149 @@ export async function handlePhotos(request: Request, env: Env) {
     const height = formData.get('height') as string;
 
     if (!file || !studentId || !sessionId) {
-      return Response.json({ error: '缺少必要参数' }, { status: 400 });
+      return new Response(JSON.stringify({ error: '缺少必要参数' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 读取文件为 ArrayBuffer 并转 base64
-    const buffer = await file.arrayBuffer();
-    const baseData = arrayBufferToBase64(buffer);
-
-    const id = `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // 读取文件为 ArrayBuffer
+    const fileData = await file.arrayBuffer();
     const mimeType = file.type || 'image/jpeg';
 
-    await env.DB.prepare(
-      `INSERT INTO photos (id, student_id, session_id, type, base_data, mime_type, width, height)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      id, studentId, sessionId, type || 'homework', baseData, mimeType,
-      parseInt(width || '0', 10), parseInt(height || '0', 10)
-    ).run();
+    // 上传照片到 Supabase Storage
+    const fileName = `${studentId}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+    const { error: uploadError } = await supabase.storage
+      .from('photos')
+      .upload(fileName, fileData, { contentType: mimeType });
 
-    return Response.json({
-      success: true,
-      id,
-      thumbnailUrl: `/api/photos/view/${id}`,
-    });
-  }
-
-  // ====== 查看单张照片 GET /api/photos/view/:id ======
-  const viewMatch = url.pathname.match(/^\/api\/photos\/view\/(.+)$/);
-  if (viewMatch && method === 'GET') {
-    const id = viewMatch[1];
-    const row = await env.DB.prepare(
-      'SELECT base_data, mime_type FROM photos WHERE id = ?'
-    ).bind(id).first<{ base_data: string; mime_type: string }>();
-
-    if (!row) {
-      return Response.json({ error: '照片不存在' }, { status: 404 });
+    if (uploadError) {
+      return new Response(JSON.stringify({ error: uploadError.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
 
-    const bytes = base64ToUint8Array(row.base_data);
-    return new Response(bytes, {
-      headers: {
-        'Content-Type': row.mime_type || 'image/jpeg',
-        'Cache-Control': 'public, max-age=86400',
-      },
-    });
+    // 获取公开 URL
+    const { data: urlData } = supabase.storage.from('photos').getPublicUrl(fileName);
+    const publicUrl = urlData.publicUrl;
+
+    // 保存记录到 photos 表
+    const { data: photoRecord, error: dbError } = await supabase
+      .from('photos')
+      .insert({
+        student_id: studentId,
+        session_id: sessionId,
+        type: type || 'homework',
+        bucket: 'photos',
+        path: fileName,
+        url: publicUrl,
+        mime_type: mimeType,
+        width: parseInt(width || '0', 10),
+        height: parseInt(height || '0', 10),
+      })
+      .select('id')
+      .single();
+
+    if (dbError) {
+      return new Response(JSON.stringify({ error: dbError.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      id: photoRecord?.id,
+      thumbnailUrl: publicUrl,
+      url: publicUrl,
+    }), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // ====== 获取照片列表 GET /api/photos?sessionId=xxx ======
   if (url.pathname === '/api/photos' && method === 'GET') {
     const sessionId = url.searchParams.get('sessionId');
-    if (!sessionId) return Response.json({ error: '缺少 sessionId' }, { status: 400 });
+    if (!sessionId) return new Response(JSON.stringify({ error: '缺少 sessionId' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
-    // 查询照片元数据（不含 base_data）
-    const { results } = await env.DB.prepare(
-      'SELECT id, student_id, session_id, type, mime_type, width, height, created_at FROM photos WHERE session_id = ?'
-    ).bind(sessionId).all();
+    // 查询照片元数据
+    const { data: results, error } = await supabase
+      .from('photos')
+      .select('id, student_id, session_id, type, url, mime_type, width, height, created_at')
+      .eq('session_id', sessionId);
+
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
 
     if (!results || results.length === 0) {
-      return Response.json([]);
+      return new Response(JSON.stringify([]), { headers: { 'Content-Type': 'application/json' } });
     }
 
     // 收集 studentId 用于批量查询学生姓名
     const studentIds = [...new Set(results.map((r: any) => r.student_id as string))];
     const studentMap: Record<string, string> = {};
     if (studentIds.length > 0) {
-      const placeholders = studentIds.map(() => '?').join(',');
-      const { results: studentResults } = await env.DB.prepare(
-        `SELECT id, name FROM students WHERE id IN (${placeholders})`
-      ).bind(...studentIds).all();
+      const { data: studentResults } = await supabase
+        .from('students')
+        .select('id, name')
+        .in('id', studentIds);
       for (const row of (studentResults || []) as any[]) {
         studentMap[row.id] = row.name;
       }
     }
 
-    const photos = (results as any[]).map((r) => ({
+    const photos = results.map((r: any) => ({
       id: r.id,
       studentId: r.student_id,
       sessionId: r.session_id,
       type: r.type,
-      thumbnailUrl: `/api/photos/view/${r.id}`,
-      url: `/api/photos/view/${r.id}`,
+      thumbnailUrl: r.url || '',
+      url: r.url || '',
       width: r.width || 0,
       height: r.height || 0,
       createdAt: r.created_at,
       studentName: studentMap[r.student_id] || '未知学生',
     }));
 
-    return Response.json(photos);
+    return new Response(JSON.stringify(photos), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  // ====== 获取照片完整数据（含 base_data）用于前端打包下载 GET /api/photos/data?sessionId=xxx ======
+  // ====== 获取照片数据用于前端打包下载 GET /api/photos/data?sessionId=xxx ======
   if (url.pathname === '/api/photos/data' && method === 'GET') {
     const sessionId = url.searchParams.get('sessionId');
-    if (!sessionId) return Response.json({ error: '缺少 sessionId' }, { status: 400 });
+    if (!sessionId) return new Response(JSON.stringify({ error: '缺少 sessionId' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
-    // 查询照片完整数据（含 base_data）
-    const { results } = await env.DB.prepare(
-      'SELECT id, student_id, session_id, type, base_data, mime_type FROM photos WHERE session_id = ?'
-    ).bind(sessionId).all();
+    // 查询照片元数据
+    const { data: results, error } = await supabase
+      .from('photos')
+      .select('id, student_id, session_id, type, url, mime_type')
+      .eq('session_id', sessionId);
+
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
 
     if (!results || results.length === 0) {
-      return Response.json([]);
+      return new Response(JSON.stringify([]), { headers: { 'Content-Type': 'application/json' } });
     }
 
     // 收集 studentId 用于批量查询学生姓名
-    const studentIds = [...new Set((results as any[]).map((r) => r.student_id as string))];
+    const studentIds = [...new Set(results.map((r: any) => r.student_id as string))];
     const studentMap: Record<string, string> = {};
     if (studentIds.length > 0) {
-      const placeholders = studentIds.map(() => '?').join(',');
-      const { results: studentResults } = await env.DB.prepare(
-        `SELECT id, name FROM students WHERE id IN (${placeholders})`
-      ).bind(...studentIds).all();
+      const { data: studentResults } = await supabase
+        .from('students')
+        .select('id, name')
+        .in('id', studentIds);
       for (const row of (studentResults || []) as any[]) {
         studentMap[row.id] = row.name;
       }
     }
 
-    const photos = (results as any[]).map((r) => ({
+    // 由于照片存储在 Supabase Storage 中，前端可以直接通过 URL 下载
+    // 此接口返回元数据和公开 URL，不再返回 base64
+    const photos = results.map((r: any) => ({
       id: r.id,
       studentName: studentMap[r.student_id] || '未知学生',
       studentId: r.student_id,
       type: r.type,
-      baseData: r.base_data,
+      url: r.url || '',
       mimeType: r.mime_type || 'image/jpeg',
     }));
 
-    return Response.json(photos);
+    return new Response(JSON.stringify(photos), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  return Response.json({ error: '未找到路由' }, { status: 404 });
+  return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
 }
