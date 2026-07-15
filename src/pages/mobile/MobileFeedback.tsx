@@ -123,6 +123,13 @@ export default function MobileFeedback() {
     }
   }, [currentSession, students.length]);
 
+  // 保存反馈结果到 localStorage（按班级，用于没有 session 时的降级）
+  useEffect(() => {
+    if (currentClass && feedbackList.length > 0) {
+      localStorage.setItem(`feedback_list_${currentClass.id}`, JSON.stringify(feedbackList));
+    }
+  }, [feedbackList, currentClass]);
+
   // 页面加载时获取反馈数据
   useEffect(() => {
     loadFeedback();
@@ -130,8 +137,21 @@ export default function MobileFeedback() {
 
   async function loadFeedback() {
     if (!currentSession) {
+      // 尝试从 localStorage 恢复
       if (currentClass) {
-        showToast('请先选择课次', 'info');
+        const cached = localStorage.getItem(`feedback_list_${currentClass.id}`);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (parsed.length > 0) {
+              setFeedbackList(parsed);
+              setViewMode('result');
+              return;
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
       }
       return;
     }
