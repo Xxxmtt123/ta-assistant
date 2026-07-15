@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
+import { feedbackApi } from '@/services/api';
 import { exportToCsv } from '@/utils/csv';
 import {
   generateSingleFeedback,
@@ -12,12 +13,24 @@ import type { Feedback } from '@/types';
 
 const AVATAR_COLORS = ['#4F46E5', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#06B6D4', '#F97316'];
 
+function hashName(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+}
+
+function getAvatarColor(name: string): string {
+  return AVATAR_COLORS[hashName(name) % AVATAR_COLORS.length];
+}
+
 const demoFeedbacks: Feedback[] = [];
 
 type ViewMode = 'setup' | 'notes' | 'result';
 
 export default function DesktopFeedback() {
-  const { students, feedbackList, setFeedbackList, showToast } = useAppStore();
+  const { students, feedbackList, setFeedbackList, showToast, currentSession } = useAppStore();
   const [viewMode, setViewMode] = useState<ViewMode>('setup');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -33,6 +46,21 @@ export default function DesktopFeedback() {
   const [studentNotes, setStudentNotes] = useState<StudentNote[]>(
     students.map(s => ({ studentId: s.id, studentName: s.name, performanceNote: '', performanceLevel: 'good' }))
   );
+
+  // 从 API 加载反馈
+  useEffect(() => {
+    if (!currentSession?.id) return;
+    (async () => {
+      try {
+        const list = await feedbackApi.getBySession(currentSession.id);
+        if (list.length > 0) {
+          setFeedbackList(list);
+        }
+      } catch {
+        // 没有反馈数据，不报错
+      }
+    })();
+  }, [currentSession?.id, setFeedbackList]);
 
   useEffect(() => {
     if (feedbackList.length === 0 && demoFeedbacks.length > 0) {
@@ -136,12 +164,20 @@ export default function DesktopFeedback() {
     finally { setIsGenerating(false); }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (editContent.length < 100) { showToast('反馈至少需要100字', 'error'); return; }
-    setFeedbackList(feedbackList.map(f =>
-      f.id === editingId ? { ...f, content: editContent, charCount: editContent.length, status: 'draft' as const } : f
-    ));
-    showToast('反馈已保存', 'success');
+    try {
+      const fb = feedbackList.find(f => f.id === editingId);
+      if (fb && currentSession?.id) {
+        await feedbackApi.save(fb.studentId, currentSession.id, editContent, fb.templateType || 'ai');
+      }
+      setFeedbackList(feedbackList.map(f =>
+        f.id === editingId ? { ...f, content: editContent, charCount: editContent.length, status: 'draft' as const } : f
+      ));
+      showToast('反馈已保存', 'success');
+    } catch (err: any) {
+      showToast(err.message || '保存反馈失败', 'error');
+    }
   };
 
   const handleExportFeedback = () => {
@@ -547,7 +583,26 @@ export default function DesktopFeedback() {
             <button className="d-btn d-btn-outline" onClick={() => setViewMode('setup')}>重新配置</button>
             <button className="d-btn d-btn-outline" onClick={handleCopyAllFeedback}>复制全部反馈</button>
             <button className="d-btn d-btn-outline" onClick={handleExportFeedback}>导出全部反馈</button>
-            <button className="d-btn d-btn-primary" onClick={() => showToast(`已保存全部反馈（${completedCount}条有效）`, 'success')}>保存全部</button>
+            <button className="d-btn d-btn-primary" onClick={async () => {
+              try {
+                if (currentSession?.id && feedbackList.length > 0) {
+                  const items = feedbackList
+                    .filter(f => f.charCount >= 100)
+                    .map(f => ({
+                      studentId: f.studentId,
+                      sessionId: currentSession.id,
+                      content: f.content,
+                      templateType: f.templateType || 'ai',
+                    }));
+                  if (items.length > 0) {
+                    await feedbackApi.batch(items);
+                  }
+                }
+                showToast(`已保存全部反馈（${completedCount}条有效）`, 'success');
+              } catch (err: any) {
+                showToast(err.message || '保存反馈失败', 'error');
+              }
+            }}>保存全部</button>
           </div>
         </div>
 
