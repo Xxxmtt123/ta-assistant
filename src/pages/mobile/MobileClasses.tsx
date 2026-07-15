@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
 import { classApi, studentApi } from '@/services/api';
-import type { Class, ScheduleConfig } from '@/types';
+import type { Class, ScheduleConfig, Student } from '@/types';
 
 const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#3B82F6', '#EC4899'];
 
@@ -16,6 +16,57 @@ const DAYS = ['一', '二', '三', '四', '五', '六', '日'];
 const DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
 const STUDENT_COLORS = ['#4F46E5', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#06B6D4', '#F97316'];
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://ta-assistant-api.2144961248.workers.dev';
+
+function hashName(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+}
+
+function getAvatarColor(name: string): string {
+  return STUDENT_COLORS[hashName(name) % STUDENT_COLORS.length];
+}
+
+function StudentAvatar({ student, size = 34 }: { student: Student; size?: number }) {
+  if (student.avatar_url) {
+    return (
+      <img
+        src={student.avatar_url}
+        alt={student.name}
+        style={{
+          width: size, height: size, borderRadius: '50%',
+          objectFit: 'cover', flexShrink: 0,
+        }}
+      />
+    );
+  }
+  return (
+    <div style={{ width: size, height: size, borderRadius: '50%', background: getAvatarColor(student.name), color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.38, fontWeight: 700, flexShrink: 0 }}>
+      {student.name.charAt(0)}
+    </div>
+  );
+}
+
+async function uploadAvatar(file: File, studentId: string): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const token = localStorage.getItem('ta_token');
+  const res = await fetch(`${API_BASE}/api/avatars/upload?studentId=${studentId}`, {
+    method: 'POST',
+    body: formData,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '上传失败' }));
+    throw new Error(err.error || '上传头像失败');
+  }
+  const data = await res.json();
+  return data.url;
+}
 
 // 生成唯一ID
 const genId = () => 'cls_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
@@ -558,9 +609,7 @@ export default function MobileClasses() {
               </div>
               {students.map((stu, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: i < students.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: STUDENT_COLORS[i % STUDENT_COLORS.length], color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
-                    {stu.name.charAt(0)}
-                  </div>
+                  <StudentAvatar student={stu} size={34} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{stu.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>出勤 {stu.attendance}/{stu.total}</div>
@@ -597,6 +646,38 @@ export default function MobileClasses() {
               <h3>{editStudent === -1 ? '添加学生' : '编辑学生'}</h3>
               <button className="stu-edit-close" onClick={() => setEditStudent(null)}>✕</button>
             </div>
+            {/* 头像区域（编辑模式显示） */}
+            {editStudent >= 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' }}>
+                <StudentAvatar student={storeStudents[editStudent]} size={40} />
+                <button
+                  className="m-btn m-btn-outline m-btn-sm"
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = async (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (!file) return;
+                      const stu = storeStudents[editStudent];
+                      if (!stu) return;
+                      showToast('正在上传头像...', 'info');
+                      try {
+                        const url = await uploadAvatar(file, stu.id);
+                        const updated = storeStudents.map((s, i) => i === editStudent ? { ...s, avatar_url: url } : s);
+                        setStudents(updated);
+                        showToast('头像上传成功', 'success');
+                      } catch (err: any) {
+                        showToast(err.message || '头像上传失败', 'error');
+                      }
+                    };
+                    input.click();
+                  }}
+                >
+                  设置头像
+                </button>
+              </div>
+            )}
             <div className="stu-field">
               <label>学生姓名 <span style={{ color: 'var(--danger)' }}>*</span></label>
               <input
