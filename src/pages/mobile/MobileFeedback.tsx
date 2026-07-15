@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useStudents } from '@/hooks/useStudents';
 import StudentSelector from '@/components/StudentSelector';
+import { feedbackApi } from '@/services/api';
 import {
   generateSingleFeedback,
   generateBatchFeedback,
@@ -15,7 +16,7 @@ type ViewMode = 'setup' | 'notes' | 'result';
 
 export default function MobileFeedback() {
   const { students } = useStudents();
-  const { currentStudentIndex, setCurrentStudentIndex, showToast, feedbackList, setFeedbackList } = useAppStore();
+  const { currentStudentIndex, setCurrentStudentIndex, showToast, feedbackList, setFeedbackList, currentSession } = useAppStore();
   const [viewMode, setViewMode] = useState<'setup' | 'notes' | 'result'>('setup');
   const [editContent, setEditContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -53,6 +54,33 @@ export default function MobileFeedback() {
       })));
     }
   }, [students.length]);
+
+  // 页面加载时获取反馈数据
+  useEffect(() => {
+    if (currentSession) {
+      loadFeedback();
+    }
+  }, [currentSession]);
+
+  async function loadFeedback() {
+    if (!currentSession) return;
+    try {
+      const list = await feedbackApi.getBySession(currentSession.id);
+      const formatted = list.map((f: any) => ({
+        id: f.id || `fb_${f.student_id}_${Date.now()}`,
+        studentId: f.student_id,
+        sessionId: f.session_id || currentSession.id,
+        content: f.content,
+        templateType: f.template_type,
+        charCount: f.char_count,
+        status: f.status,
+        createdAt: f.created_at || new Date().toISOString().slice(0, 10),
+      }));
+      setFeedbackList(formatted);
+    } catch (e) {
+      showToast('加载反馈失败', 'error');
+    }
+  }
 
   const charCount = editContent.length;
   const charCountClass = charCount >= 160 ? 'over' : charCount >= 140 ? 'warn' : '';
@@ -171,22 +199,48 @@ export default function MobileFeedback() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (editContent.length < 100) { showToast('反馈至少需要100字', 'error'); return; }
     const currentStudent = students[currentStudentIndex];
-    if (!currentStudent) return;
-    setFeedbackList(feedbackList.map(f =>
-      f.studentId === currentStudent.id
-        ? { ...f, content: editContent, charCount: editContent.length, status: 'draft' as const }
-        : f
-    ));
-    showToast(`已保存 ${currentStudent.name} 的反馈`, 'success');
+    if (!currentStudent || !currentSession) return;
+    const existing = feedbackList.find(f => f.studentId === currentStudent.id);
+    const templateType = existing?.templateType || 'ai';
+    try {
+      await feedbackApi.save(currentStudent.id, currentSession.id, editContent, templateType);
+      setFeedbackList(feedbackList.map(f =>
+        f.studentId === currentStudent.id
+          ? { ...f, content: editContent, charCount: editContent.length, status: 'draft' as const }
+          : f
+      ));
+      showToast(`已保存 ${currentStudent.name} 的反馈`, 'success');
+    } catch (e: any) {
+      showToast(e.message || '保存失败', 'error');
+    }
   };
 
-  const handleSaveAndNext = () => {
-    handleSave();
+  const handleSaveAndNext = async () => {
+    await handleSave();
     if (currentStudentIndex < students.length - 1) {
       setCurrentStudentIndex(currentStudentIndex + 1);
+    }
+  };
+
+  const saveAllFeedback = async () => {
+    if (!currentSession) {
+      showToast('当前没有选中的课次', 'error');
+      return;
+    }
+    try {
+      const items = feedbackList.map(f => ({
+        studentId: f.studentId,
+        sessionId: currentSession.id,
+        content: f.content,
+        templateType: f.templateType,
+      }));
+      await feedbackApi.batch(items);
+      showToast('全部反馈保存成功', 'success');
+    } catch (e: any) {
+      showToast(e.message || '保存失败', 'error');
     }
   };
 
