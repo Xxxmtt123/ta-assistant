@@ -71,17 +71,62 @@ export default function MobileFeedback() {
 
   // 同步 studentNotes 跟 students（班级切换时重新初始化）
   const lastInitClassId = useRef<string | null>(null);
+  const isFirstMount = useRef(true);
+
   useEffect(() => {
     const classId = currentClass?.id || '';
-    if (classId && classId !== lastInitClassId.current && students.length > 0) {
+    if (!classId || students.length === 0) return;
+
+    if (classId !== lastInitClassId.current) {
       lastInitClassId.current = classId;
+
+      // 尝试从缓存恢复（切换 tab 回来时不重置）
+      if (isFirstMount.current) {
+        isFirstMount.current = false;
+        const cachedNotes = currentSession
+          ? localStorage.getItem(`feedback_notes_${currentSession.id}`)
+          : null;
+        const cachedList = currentClass
+          ? localStorage.getItem(`feedback_list_${currentClass.id}`)
+          : null;
+        const cachedCourse = currentSession
+          ? localStorage.getItem(`feedback_course_${currentSession.id}`)
+          : null;
+        const cachedPrompt = currentSession
+          ? localStorage.getItem(`feedback_prompt_${currentSession.id}`)
+          : null;
+
+        if (cachedList) {
+          try {
+            const parsed = JSON.parse(cachedList);
+            if (parsed.length > 0) {
+              setFeedbackList(parsed);
+              setViewMode('result');
+            }
+          } catch {}
+        }
+
+        if (cachedCourse) setCourseContent(cachedCourse);
+        if (cachedPrompt) setAdditionalPrompt(cachedPrompt);
+
+        if (cachedNotes) {
+          try {
+            const parsed = JSON.parse(cachedNotes) as StudentNote[];
+            if (parsed.length === students.length) {
+              setStudentNotes(parsed);
+              return; // 有缓存就不重置
+            }
+          } catch {}
+        }
+      }
+
+      // 真正切换班级时才重置
       setStudentNotes(students.map(s => ({
         studentId: s.id,
         studentName: s.name,
         performanceNote: '',
         performanceLevel: 'good',
       })));
-      // 切换班级时清空反馈列表和课程内容
       setFeedbackList([]);
       setCourseContent('');
       setAdditionalPrompt('');
