@@ -107,10 +107,7 @@ export default function DesktopFeedback() {
       lastInitClassId.current = currentClass.id;
 
       // 尝试恢复反馈结果
-      const sessionId = currentSession?.id;
-      const cachedList = sessionId
-        ? localStorage.getItem(`feedback_list_${currentClass.id}`)
-        : null;
+      const cachedList = localStorage.getItem(`feedback_list_${currentClass.id}`);
       if (cachedList) {
         try {
           const parsed: Feedback[] = JSON.parse(cachedList);
