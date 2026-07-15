@@ -67,8 +67,8 @@ export default function DesktopSettings() {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border-light)' }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{user?.email || '-'}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>邮箱</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{user?.username || '-'}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>用户名</div>
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0' }}>
