@@ -35,11 +35,11 @@ function getAvatarColor(name: string): string {
   return AVATAR_COLORS[hashName(name) % AVATAR_COLORS.length];
 }
 
-function StudentAvatar({ student, size = 32 }: { student: Student; size?: number }) {
-  if (student.avatar_url) {
+function StudentAvatar({ student, size = 32 }: { student: any; size?: number }) {
+  if (student.avatarUrl || student.avatar_url) {
     return (
       <img
-        src={student.avatar_url}
+        src={student.avatarUrl || student.avatar_url}
         alt={student.name}
         style={{
           width: size, height: size, borderRadius: '50%',
@@ -961,7 +961,7 @@ function StudentEditModal({
     try {
       const url = await uploadAvatar(file, student.id);
       setAvatarUrl(url);
-      setStudents(students.map((s) => (s.id === student.id ? { ...s, avatar_url: url } : s)));
+      setStudents(students.map((s) => (s.id === student.id ? { ...s, avatarUrl: url, avatar_url: url } : s)));
       showToast('头像上传成功', 'success');
     } catch (err: any) {
       showToast(err.message || '头像上传失败', 'error');
