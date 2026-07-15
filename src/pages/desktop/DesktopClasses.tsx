@@ -929,11 +929,11 @@ function ClassDetail({
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{cls.scheduleConfig.days.map(d => DAY_NAMES[d]).join('、')}</span>
                 </div>
               )}
-              {cls.scheduleConfig?.continuousDates && cls.scheduleConfig.continuousDates.length > 0 && (
+              {cls.scheduleConfig?.continuousDates && cls.scheduleConfig.continuousDates.filter((d: string) => /^\d+月\d+日/.test(d)).length > 0 && (
                 <div style={{ padding: '10px 0' }}>
                   <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>连续上课日期</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {cls.scheduleConfig.continuousDates.map((d, i) => (
+                    {cls.scheduleConfig.continuousDates.filter((d: string) => /^\d+月\d+日/.test(d)).map((d, i) => (
                       <span key={i} className="tag tag-primary" style={{ fontSize: 11 }}>{d}</span>
                     ))}
                   </div>
