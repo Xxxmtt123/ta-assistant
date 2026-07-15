@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useStudents } from '@/hooks/useStudents';
+import { scoreApi } from '@/services/api';
 import StudentSelector from '@/components/StudentSelector';
 import type { Score } from '@/types';
 
@@ -33,6 +34,7 @@ export default function MobileScores() {
     setScores,
     currentStudentIndex,
     setCurrentStudentIndex,
+    currentClass,
     currentSession,
     showToast,
   } = useAppStore();
@@ -52,6 +54,36 @@ export default function MobileScores() {
   const existingScore = scores.find(
     (s) => s.studentId === currentStudent?.id && s.sessionId === sessionId
   );
+
+  // 页面加载时从 API 获取成绩数据
+  useEffect(() => {
+    if (!currentClass || !currentSession) return;
+
+    const sessionId = currentSession.id;
+
+    async function loadScores() {
+      try {
+        const scoreList = await scoreApi.getBySession(sessionId);
+        const formatted = scoreList.map((s) => ({
+          id: s.id || `score-${s.student_id}-${sessionId}`,
+          studentId: s.student_id,
+          sessionId: s.session_id || sessionId,
+          score: s.score,
+          timeUsed: s.time_used,
+          attendance: s.attendance,
+          onlineHomework: s.online_homework,
+          offlineHomework: s.offline_homework,
+          note: s.note,
+        }));
+        setScores(formatted);
+      } catch (e) {
+        showToast('加载成绩失败', 'error');
+      }
+    }
+
+    loadScores();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentClass, currentSession]);
 
   // 学生切换时回填已有成绩数据
   useEffect(() => {
@@ -79,7 +111,7 @@ export default function MobileScores() {
     isScoreFilled(scores.find((s) => s.studentId === stu.id && s.sessionId === sessionId))
   ).length;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!currentStudent) {
       showToast('请先选择学生', 'error');
       return;
@@ -106,7 +138,24 @@ export default function MobileScores() {
       newScores = [...scores, scoreRecord];
     }
     setScores(newScores);
-    showToast(`已保存 ${currentStudent.name} 的成绩`, 'success');
+
+    try {
+      const scoresToSave = newScores.map((s) => ({
+        studentId: s.studentId,
+        sessionId,
+        score: s.score,
+        timeUsed: s.timeUsed,
+        attendance: s.attendance,
+        onlineHomework: s.onlineHomework,
+        offlineHomework: s.offlineHomework,
+        note: s.note,
+      }));
+      await scoreApi.batch(scoresToSave);
+      showToast(`已保存 ${currentStudent.name} 的成绩`, 'success');
+    } catch (e: any) {
+      showToast(e.message || '保存失败', 'error');
+      return;
+    }
 
     // 保存后自动跳转下一个学生
     if (currentStudentIndex < students.length - 1) {
