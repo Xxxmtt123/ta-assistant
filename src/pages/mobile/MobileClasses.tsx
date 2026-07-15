@@ -104,8 +104,8 @@ export default function MobileClasses() {
   async function loadData() {
     try {
       const classList = await classApi.list();
-      setClasses(classList);
-      if (classList.length > 0 && !currentClass) {
+      setClasses(classList || []);
+      if (classList && classList.length > 0 && !currentClass) {
         setCurrentClass(classList[0]);
       }
     } catch (e: any) {
