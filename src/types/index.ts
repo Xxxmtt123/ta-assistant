@@ -84,7 +84,7 @@ export interface Photo {
 // ====== 用户 ======
 export interface User {
   id: string;
-  email: string;
+  username: string;
   name: string;
   token?: string;
 }
