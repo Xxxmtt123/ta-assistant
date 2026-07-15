@@ -66,9 +66,9 @@ export default function App() {
   async function loadInitialData() {
     try {
       const classList = await classApi.list();
-      setClasses(classList);
+      setClasses(classList || []);
       // 如果有班级，加载第一个班级的学生
-      if (classList.length > 0) {
+      if (classList && classList.length > 0) {
         try {
           const studentList = await studentApi.getByClass(classList[0].id);
           setStudents(studentList);
