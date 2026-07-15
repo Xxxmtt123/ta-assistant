@@ -21,7 +21,21 @@ export async function handleClasses(request: Request, env: Env) {
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
-    return new Response(JSON.stringify(data || []), { headers: { 'Content-Type': 'application/json' } });
+
+    // 转换为 camelCase
+    const classes = (data || []).map((row: any) => ({
+      id: row.id,
+      userId: row.user_id,
+      name: row.name,
+      semester: row.semester,
+      scheduleMode: row.schedule_mode,
+      scheduleConfig: row.schedule_config,
+      totalSessions: row.total_sessions,
+      studentCount: row.student_count,
+      createdAt: row.created_at,
+    }));
+
+    return new Response(JSON.stringify(classes), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // 创建班级
@@ -40,13 +54,26 @@ export async function handleClasses(request: Request, env: Env) {
         schedule_config: data.scheduleConfig || '{}',
         total_sessions: data.totalSessions || 20,
       })
-      .select('id')
+      .select('*')
       .single();
 
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
-    return new Response(JSON.stringify({ id: newClass?.id, success: true }), { headers: { 'Content-Type': 'application/json' } });
+
+    const result = {
+      id: newClass.id,
+      userId: newClass.user_id,
+      name: newClass.name,
+      semester: newClass.semester,
+      scheduleMode: newClass.schedule_mode,
+      scheduleConfig: newClass.schedule_config,
+      totalSessions: newClass.total_sessions,
+      studentCount: newClass.student_count,
+      createdAt: newClass.created_at,
+    };
+
+    return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // 更新班级
@@ -62,16 +89,30 @@ export async function handleClasses(request: Request, env: Env) {
     if (data.scheduleConfig !== undefined) updates.schedule_config = data.scheduleConfig;
     if (data.totalSessions !== undefined) updates.total_sessions = data.totalSessions;
 
-    if (Object.keys(updates).length > 0) {
-      const { error } = await supabase
-        .from('classes')
-        .update(updates)
-        .eq('id', id);
-      if (error) {
-        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-      }
+    const { data: updated, error } = await supabase
+      .from('classes')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
-    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+
+    const result = {
+      id: updated.id,
+      userId: updated.user_id,
+      name: updated.name,
+      semester: updated.semester,
+      scheduleMode: updated.schedule_mode,
+      scheduleConfig: updated.schedule_config,
+      totalSessions: updated.total_sessions,
+      studentCount: updated.student_count,
+      createdAt: updated.created_at,
+    };
+
+    return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // 删除班级
