@@ -68,6 +68,7 @@ export const classApi = {
 
 // ====== 学生 ======
 export const studentApi = {
+  getByClass: (classId: string) => request<Student[]>(`/api/students?classId=${classId}`),
   create: (data: Partial<Student> & { classId: string }) =>
     request<Student>('/api/students', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Student>) =>
