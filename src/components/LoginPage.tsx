@@ -1,9 +1,115 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/services/api';
 import { useAppStore } from '@/stores/useAppStore';
 
 type Step = 'welcome' | 'login';
+
+/* 滑块验证组件 */
+function SliderCaptcha({ onVerify }: { onVerify: () => void }) {
+  const [verified, setVerified] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const startXRef = useRef<number>(0);
+  const handleLeftRef = useRef<number>(3);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (verified) return;
+    setDragging(true);
+    startXRef.current = e.clientX - handleLeftRef.current;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!dragging || !sliderRef.current) return;
+    const track = sliderRef.current;
+    const rect = track.getBoundingClientRect();
+    const x = Math.min(Math.max(e.clientX - startXRef.current, 3), rect.width - 41);
+    handleLeftRef.current = x;
+
+    const handle = track.querySelector('[data-handle]') as HTMLElement;
+    if (handle) handle.style.left = `${x}px`;
+    const fill = track.querySelector('[data-fill]') as HTMLElement;
+    if (fill) fill.style.width = `${x + 19}px`;
+
+    if (x >= rect.width - 50) {
+      setVerified(true);
+      setDragging(false);
+      onVerify();
+    }
+  };
+
+  const handleMouseUp = () => setDragging(false);
+
+  return (
+    <div
+      ref={sliderRef}
+      style={{
+        position: 'relative',
+        height: 44,
+        background: '#e8e8e8',
+        borderRadius: 22,
+        overflow: 'hidden',
+        userSelect: 'none',
+        marginTop: 4,
+      }}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
+      <div
+        data-fill
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          height: '100%',
+          background: verified ? '#4CAF50' : '#e94560',
+          width: 0,
+          borderRadius: 22,
+          transition: verified ? 'all 0.3s' : 'none',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          fontSize: 13,
+          color: verified ? '#fff' : '#999',
+          pointerEvents: 'none',
+          zIndex: 1,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {verified ? '验证成功' : '拖动滑块完成验证'}
+      </div>
+      <div
+        data-handle
+        style={{
+          position: 'absolute',
+          top: 3,
+          left: 3,
+          width: 38,
+          height: 38,
+          background: '#fff',
+          borderRadius: '50%',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+          cursor: verified ? 'default' : 'grab',
+          zIndex: 2,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 18,
+          transition: verified ? 'all 0.3s' : 'none',
+        }}
+        onMouseDown={handleMouseDown}
+      >
+        {verified ? '\u2713' : '\u2192'}
+      </div>
+    </div>
+  );
+}
 
 /* 像素老师组件 - 纯CSS绘制 */
 function PixelTeacher() {
@@ -89,11 +195,12 @@ function PixelHeart() {
 export default function LoginPage() {
   const [step, setStep] = useState<Step>('welcome');
   const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [slideIn, setSlideIn] = useState(false);
+  const [captchaVerified, setCaptchaVerified] = useState(false);
   const navigate = useNavigate();
   const { setUser, showToast } = useAppStore();
 
@@ -108,18 +215,22 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    if (!username || !password) return;
+    if (!captchaVerified) {
+      showToast('请先完成滑块验证', 'error');
+      return;
+    }
     setLoading(true);
     try {
       if (isRegister) {
         if (!name) { showToast('请输入姓名', 'error'); setLoading(false); return; }
-        const data = await authApi.register(email, password, name);
+        const data = await authApi.register(username, password, name);
         localStorage.setItem('ta_token', data.token);
         setUser(data.user);
         showToast('注册成功', 'success');
         navigate('/mobile');
       } else {
-        const data = await authApi.login(email, password);
+        const data = await authApi.login(username, password);
         localStorage.setItem('ta_token', data.token);
         setUser(data.user);
         showToast('登录成功', 'success');
@@ -131,6 +242,19 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    height: 48,
+    padding: '0 16px',
+    background: '#16213e',
+    border: '3px solid #0f3460',
+    color: '#fff',
+    fontSize: 14,
+    outline: 'none',
+    fontFamily: "'Courier New', monospace",
+    boxShadow: 'inset 2px 2px 0 rgba(0,0,0,0.3)',
   };
 
   return (
@@ -215,9 +339,9 @@ export default function LoginPage() {
             alignItems: 'center',
           }}>
             {[
-              { icon: '⚔️', text: '一键评分，BOSS速通' },
-              { icon: '📷', text: '照片收集，全图鉴达成' },
-              { icon: '🤖', text: 'AI助攻，自动挂机' },
+              { icon: '\u2694\uFE0F', text: '一键评分，BOSS速通' },
+              { icon: '\uD83D\uDCF7', text: '照片收集，全图鉴达成' },
+              { icon: '\uD83E\uDD16', text: 'AI助攻，自动挂机' },
             ].map((item) => (
               <div key={item.text} style={{
                 display: 'flex',
@@ -265,7 +389,7 @@ export default function LoginPage() {
               e.currentTarget.style.boxShadow = '6px 6px 0 #0f3460';
             }}
           >
-            ▶ PRESS START
+            {'\u25B6'} PRESS START
           </button>
 
         </div>
@@ -296,7 +420,7 @@ export default function LoginPage() {
               fontFamily: "'Courier New', monospace",
             }}
           >
-            ← BACK
+            {'\u2190'} BACK
           </button>
 
           {/* 像素锁 */}
@@ -341,18 +465,7 @@ export default function LoginPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="请输入昵称"
-                  style={{
-                    width: '100%',
-                    height: 48,
-                    padding: '0 16px',
-                    background: '#16213e',
-                    border: '3px solid #0f3460',
-                    color: '#fff',
-                    fontSize: 14,
-                    outline: 'none',
-                    fontFamily: "'Courier New', monospace",
-                    boxShadow: 'inset 2px 2px 0 rgba(0,0,0,0.3)',
-                  }}
+                  style={inputStyle}
                   onFocus={(e) => { e.currentTarget.style.borderColor = '#e94560'; }}
                   onBlur={(e) => { e.currentTarget.style.borderColor = '#0f3460'; }}
                 />
@@ -361,25 +474,14 @@ export default function LoginPage() {
 
             <div>
               <label style={{ fontSize: 12, color: '#FFD700', display: 'block', marginBottom: 4 }}>
-                EMAIL
+                USERNAME
               </label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                style={{
-                  width: '100%',
-                  height: 48,
-                  padding: '0 16px',
-                  background: '#16213e',
-                  border: '3px solid #0f3460',
-                  color: '#fff',
-                  fontSize: 14,
-                  outline: 'none',
-                  fontFamily: "'Courier New', monospace",
-                  boxShadow: 'inset 2px 2px 0 rgba(0,0,0,0.3)',
-                }}
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="请输入用户名"
+                style={inputStyle}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#e94560'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#0f3460'; }}
               />
@@ -394,22 +496,14 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="********"
-                style={{
-                  width: '100%',
-                  height: 48,
-                  padding: '0 16px',
-                  background: '#16213e',
-                  border: '3px solid #0f3460',
-                  color: '#fff',
-                  fontSize: 14,
-                  outline: 'none',
-                  fontFamily: "'Courier New', monospace",
-                  boxShadow: 'inset 2px 2px 0 rgba(0,0,0,0.3)',
-                }}
+                style={inputStyle}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#e94560'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#0f3460'; }}
               />
             </div>
+
+            {/* 滑块验证 */}
+            <SliderCaptcha onVerify={() => setCaptchaVerified(true)} />
 
             {/* 切换 */}
             <div style={{
@@ -439,30 +533,30 @@ export default function LoginPage() {
             {/* 提交按钮 */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !captchaVerified}
               style={{
                 width: '100%',
                 height: 52,
                 marginTop: 8,
-                background: loading ? '#555' : '#e94560',
+                background: loading || !captchaVerified ? '#555' : '#e94560',
                 color: '#fff',
                 fontSize: 14,
                 fontWeight: 'bold',
                 border: '4px solid #fff',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                boxShadow: loading ? 'none' : '6px 6px 0 #0f3460',
+                cursor: loading || !captchaVerified ? 'not-allowed' : 'pointer',
+                boxShadow: loading || !captchaVerified ? 'none' : '6px 6px 0 #0f3460',
                 fontFamily: "'Courier New', monospace",
                 letterSpacing: 2,
                 transition: 'all 0.1s',
               }}
               onMouseDown={(e) => {
-                if (!loading) {
+                if (!loading && captchaVerified) {
                   e.currentTarget.style.transform = 'translate(3px, 3px)';
                   e.currentTarget.style.boxShadow = '3px 3px 0 #0f3460';
                 }
               }}
               onMouseUp={(e) => {
-                if (!loading) {
+                if (!loading && captchaVerified) {
                   e.currentTarget.style.transform = 'translate(0, 0)';
                   e.currentTarget.style.boxShadow = '6px 6px 0 #0f3460';
                 }
@@ -476,7 +570,7 @@ export default function LoginPage() {
           <div style={{ marginTop: 20, textAlign: 'center' }}>
             <button
               onClick={() => {
-                setUser({ id: 'dev', email: 'dev@ta.com', name: '开发测试' });
+                setUser({ id: 'dev', username: 'dev', name: '开发测试' });
                 localStorage.setItem('ta_token', 'dev.token.placeholder');
                 showToast('已进入开发模式', 'info');
                 navigate('/mobile');
