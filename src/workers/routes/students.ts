@@ -1,20 +1,28 @@
 import type { Env } from '../index';
+import { getSupabaseClient } from '../index';
 import { verifyAuth } from '../middleware/auth';
 
 export async function handleStudents(request: Request, env: Env) {
   const user = await verifyAuth(request, env);
-  if (!user) return Response.json({ error: '请先登录' }, { status: 401 });
+  if (!user) return new Response(JSON.stringify({ error: '请先登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
 
   const url = new URL(request.url);
   const method = request.method;
   const classId = url.searchParams.get('classId');
+  const supabase = getSupabaseClient(env);
 
   // 获取班级的学生列表
   if (url.pathname === '/api/students' && method === 'GET' && classId) {
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM students WHERE class_id = ? ORDER BY name'
-    ).bind(classId).all();
-    return Response.json(results);
+    const { data, error } = await supabase
+      .from('students')
+      .select('*')
+      .eq('class_id', classId)
+      .order('name');
+
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify(data || []), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // 创建学生
@@ -23,11 +31,23 @@ export async function handleStudents(request: Request, env: Env) {
       classId: string; name: string; studentId?: string;
       phone?: string; parentName?: string; note?: string;
     };
-    const id = crypto.randomUUID();
-    await env.DB.prepare(
-      'INSERT INTO students (id, class_id, name, student_id, phone, parent_name, note) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(id, data.classId, data.name, data.studentId || '', data.phone || '', data.parentName || '', data.note || '').run();
-    return Response.json({ id, success: true });
+    const { data: newStudent, error } = await supabase
+      .from('students')
+      .insert({
+        class_id: data.classId,
+        name: data.name,
+        student_id: data.studentId || '',
+        phone: data.phone || '',
+        parent_name: data.parentName || '',
+        note: data.note || '',
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ id: newStudent?.id, success: true }), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // 更新学生
@@ -35,28 +55,38 @@ export async function handleStudents(request: Request, env: Env) {
   if (match && method === 'PUT') {
     const id = match[1];
     const data = await request.json();
-    const sets: string[] = [];
-    const values: unknown[] = [];
+    const updates: Record<string, unknown> = {};
 
-    if (data.name !== undefined) { sets.push('name = ?'); values.push(data.name); }
-    if (data.studentId !== undefined) { sets.push('student_id = ?'); values.push(data.studentId); }
-    if (data.phone !== undefined) { sets.push('phone = ?'); values.push(data.phone); }
-    if (data.parentName !== undefined) { sets.push('parent_name = ?'); values.push(data.parentName); }
-    if (data.note !== undefined) { sets.push('note = ?'); values.push(data.note); }
-    if (data.classId !== undefined) { sets.push('class_id = ?'); values.push(data.classId); }
+    if (data.name !== undefined) updates.name = data.name;
+    if (data.studentId !== undefined) updates.student_id = data.studentId;
+    if (data.phone !== undefined) updates.phone = data.phone;
+    if (data.parentName !== undefined) updates.parent_name = data.parentName;
+    if (data.note !== undefined) updates.note = data.note;
+    if (data.classId !== undefined) updates.class_id = data.classId;
 
-    if (sets.length > 0) {
-      values.push(id);
-      await env.DB.prepare(`UPDATE students SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase
+        .from('students')
+        .update(updates)
+        .eq('id', id);
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+      }
     }
-    return Response.json({ success: true });
+    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // 删除学生
   if (match && method === 'DELETE') {
-    await env.DB.prepare('DELETE FROM students WHERE id = ?').bind(match[1]).run();
-    return Response.json({ success: true });
+    const { error } = await supabase
+      .from('students')
+      .delete()
+      .eq('id', match[1]);
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  return Response.json({ error: '未找到路由' }, { status: 404 });
+  return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
 }
