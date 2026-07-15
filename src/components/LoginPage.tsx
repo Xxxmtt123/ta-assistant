@@ -1,16 +1,113 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/services/api';
 import { useAppStore } from '@/stores/useAppStore';
 
+/* ─── 粒子背景组件 ─── */
+function ParticleBackground() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let w = canvas.width = window.innerWidth;
+    let h = canvas.height = window.innerHeight;
+
+    const particles: { x: number; y: number; vx: number; vy: number; size: number; alpha: number }[] = [];
+    const count = 80;
+
+    for (let i = 0; i < count; i++) {
+      particles.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        size: Math.random() * 2 + 0.5,
+        alpha: Math.random() * 0.5 + 0.2,
+      });
+    }
+
+    let raf = 0;
+    const animate = () => {
+      ctx.clearRect(0, 0, w, h);
+      particles.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = w;
+        if (p.x > w) p.x = 0;
+        if (p.y < 0) p.y = h;
+        if (p.y > h) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(212, 175, 55, ${p.alpha})`;
+        ctx.fill();
+      });
+
+      // 连线
+      for (let i = 0; i < count; i++) {
+        for (let j = i + 1; j < count; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 150) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(212, 175, 55, ${0.08 * (1 - dist / 150)})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      }
+      raf = requestAnimationFrame(animate);
+    };
+
+    animate();
+
+    const handleResize = () => {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 1,
+        pointerEvents: 'none',
+      }}
+    />
+  );
+}
+
+/* ─── 主页面 ─── */
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const navigate = useNavigate();
   const { setUser, showToast } = useAppStore();
+
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 100);
+    return () => clearTimeout(t);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,218 +138,393 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* 莫奈风格背景 - 多层柔和径向渐变 */}
-      <div className="absolute inset-0">
-        {/* 基底 - 柔和的蓝绿色调（睡莲池塘） */}
-        <div className="absolute inset-0" style={{
-          background: 'linear-gradient(135deg, #a8d5ba 0%, #7ec8c8 25%, #9bb5ce 50%, #c4a77d 75%, #d4a5a5 100%)'
-        }} />
-        {/* 柔和的粉色光斑（花朵） */}
-        <div className="absolute -top-20 -left-20 w-[500px] h-[500px] rounded-full opacity-40" style={{
-          background: 'radial-gradient(circle, #f4d03f 0%, #f8b500 30%, transparent 70%)',
-          filter: 'blur(60px)'
-        }} />
-        <div className="absolute top-1/4 right-0 w-[400px] h-[400px] rounded-full opacity-30" style={{
-          background: 'radial-gradient(circle, #e8a0bf 0%, #d478a8 40%, transparent 70%)',
-          filter: 'blur(50px)'
-        }} />
-        {/* 柔和的蓝紫光斑（水面倒影） */}
-        <div className="absolute bottom-0 left-1/4 w-[600px] h-[400px] rounded-full opacity-35" style={{
-          background: 'radial-gradient(circle, #7ec8e3 0%, #5ba8c4 40%, transparent 70%)',
-          filter: 'blur(70px)'
-        }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] rounded-full opacity-25" style={{
-          background: 'radial-gradient(circle, #b8e0d2 0%, #9dd3c8 50%, transparent 70%)',
-          filter: 'blur(80px)'
-        }} />
-        {/* 淡黄色阳光 */}
-        <div className="absolute top-10 right-1/4 w-[300px] h-[300px] rounded-full opacity-30" style={{
-          background: 'radial-gradient(circle, #ffeaa7 0%, #fdcb6e 40%, transparent 70%)',
-          filter: 'blur(40px)'
-        }} />
-        {/* 微妙的噪点纹理增加画作感 */}
-        <div className="absolute inset-0 opacity-[0.03]" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-          backgroundSize: '128px 128px'
-        }} />
-      </div>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+        background: '#0a0a0a',
+      }}
+    >
+      {/* 电影感背景层 */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: `
+            radial-gradient(ellipse at 20% 80%, rgba(139, 90, 43, 0.15) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 20%, rgba(212, 175, 55, 0.08) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 50%, rgba(30, 30, 35, 0.8) 0%, #0a0a0a 70%)
+          `,
+        }}
+      />
 
-      <div className="w-full max-w-md px-6 relative z-10">
-        {/* 玻璃卡片 */}
-        <div className="rounded-3xl p-8 shadow-2xl" style={{
-          background: 'rgba(255, 255, 255, 0.15)',
-          backdropFilter: 'blur(20px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-          border: '1px solid rgba(255, 255, 255, 0.3)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
-        }}>
+      {/* 顶部电影光晕 */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '-30%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '120%',
+          height: '80%',
+          background: 'radial-gradient(ellipse, rgba(212, 175, 55, 0.06) 0%, transparent 60%)',
+          filter: 'blur(80px)',
+          animation: 'breathe 8s ease-in-out infinite',
+        }}
+      />
 
-          {/* Logo 区域 */}
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center" style={{
-              background: 'rgba(255, 255, 255, 0.25)',
-              border: '1px solid rgba(255, 255, 255, 0.4)',
-              backdropFilter: 'blur(10px)'
-            }}>
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+      {/* 底部暗角 vignette */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* 粒子层 */}
+      <ParticleBackground />
+
+      {/* 扫描线效果 */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px)',
+          pointerEvents: 'none',
+          zIndex: 2,
+        }}
+      />
+
+      {/* 内容区 */}
+      <div
+        className="w-full max-w-sm px-6 relative z-10"
+        style={{
+          opacity: mounted ? 1 : 0,
+          transform: mounted ? 'translateY(0)' : 'translateY(30px)',
+          transition: 'all 1.2s cubic-bezier(0.22, 1, 0.36, 1)',
+        }}
+      >
+        {/* 电影胶片装饰线 */}
+        <div
+          style={{
+            position: 'absolute',
+            top: -40,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 1,
+            height: 60,
+            background: 'linear-gradient(to bottom, transparent, rgba(212, 175, 55, 0.4))',
+          }}
+        />
+
+        {/* 主卡片 */}
+        <div
+          style={{
+            background: 'rgba(15, 15, 18, 0.7)',
+            backdropFilter: 'blur(30px) saturate(120%)',
+            WebkitBackdropFilter: 'blur(30px) saturate(120%)',
+            border: '1px solid rgba(212, 175, 55, 0.15)',
+            borderRadius: 4,
+            padding: '48px 36px',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          {/* 顶部金色细线 */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 1,
+              background: 'linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.5), transparent)',
+            }}
+          />
+
+          {/* 角落装饰 */}
+          <div style={{ position: 'absolute', top: 12, left: 12, width: 20, height: 20, borderTop: '1px solid rgba(212, 175, 55, 0.3)', borderLeft: '1px solid rgba(212, 175, 55, 0.3)' }} />
+          <div style={{ position: 'absolute', top: 12, right: 12, width: 20, height: 20, borderTop: '1px solid rgba(212, 175, 55, 0.3)', borderRight: '1px solid rgba(212, 175, 55, 0.3)' }} />
+          <div style={{ position: 'absolute', bottom: 12, left: 12, width: 20, height: 20, borderBottom: '1px solid rgba(212, 175, 55, 0.3)', borderLeft: '1px solid rgba(212, 175, 55, 0.3)' }} />
+          <div style={{ position: 'absolute', bottom: 12, right: 12, width: 20, height: 20, borderBottom: '1px solid rgba(212, 175, 55, 0.3)', borderRight: '1px solid rgba(212, 175, 55, 0.3)' }} />
+
+          {/* Logo */}
+          <div style={{ textAlign: 'center', marginBottom: 40 }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                margin: '0 auto 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid rgba(212, 175, 55, 0.3)',
+                position: 'relative',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 4,
+                  border: '1px solid rgba(212, 175, 55, 0.15)',
+                }}
+              />
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" strokeWidth="1">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-white mb-1 drop-shadow-sm">助教效率助手</h1>
-            <p className="text-sm text-white/70">
-              {isRegister ? '创建账号，开启高效教学' : '欢迎回来，继续高效工作'}
+            <h1
+              style={{
+                fontSize: 22,
+                fontWeight: 300,
+                letterSpacing: '0.3em',
+                color: '#e8e0d0',
+                marginBottom: 8,
+                fontFamily: "'Georgia', 'Times New Roman', serif",
+              }}
+            >
+              助教效率助手
+            </h1>
+            <p
+              style={{
+                fontSize: 11,
+                letterSpacing: '0.15em',
+                color: 'rgba(212, 175, 55, 0.6)',
+                textTransform: 'uppercase',
+              }}
+            >
+              {isRegister ? 'Create Account' : 'Welcome Back'}
             </p>
           </div>
 
-          {/* 登录/注册 切换标签 */}
-          <div className="flex rounded-xl p-1 mb-6" style={{
-            background: 'rgba(255, 255, 255, 0.15)',
-            border: '1px solid rgba(255, 255, 255, 0.2)'
-          }}>
+          {/* 标签切换 */}
+          <div
+            style={{
+              display: 'flex',
+              marginBottom: 32,
+              borderBottom: '1px solid rgba(212, 175, 55, 0.1)',
+            }}
+          >
             <button
               onClick={() => setIsRegister(false)}
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
-                !isRegister
-                  ? 'bg-white/90 text-gray-800 shadow-sm'
-                  : 'text-white/70 hover:text-white'
-              }`}
+              style={{
+                flex: 1,
+                padding: '12px 0',
+                fontSize: 12,
+                letterSpacing: '0.1em',
+                color: !isRegister ? '#d4af37' : 'rgba(255,255,255,0.3)',
+                background: 'none',
+                border: 'none',
+                borderBottom: !isRegister ? '1px solid #d4af37' : '1px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.4s ease',
+                fontWeight: !isRegister ? 400 : 300,
+              }}
             >
-              登录
+              登 录
             </button>
             <button
               onClick={() => setIsRegister(true)}
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
-                isRegister
-                  ? 'bg-white/90 text-gray-800 shadow-sm'
-                  : 'text-white/70 hover:text-white'
-              }`}
+              style={{
+                flex: 1,
+                padding: '12px 0',
+                fontSize: 12,
+                letterSpacing: '0.1em',
+                color: isRegister ? '#d4af37' : 'rgba(255,255,255,0.3)',
+                background: 'none',
+                border: 'none',
+                borderBottom: isRegister ? '1px solid #d4af37' : '1px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.4s ease',
+                fontWeight: isRegister ? 400 : 300,
+              }}
             >
-              注册
+              注 册
             </button>
           </div>
 
           {/* 表单 */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {isRegister && (
               <div>
-                <label className="block text-sm font-medium text-white/90 mb-1.5">姓名</label>
-                <div className="relative">
-                  <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="请输入您的姓名"
-                    className="w-full h-11 pl-10 pr-4 rounded-xl text-sm outline-none transition-all duration-200 text-white placeholder-white/40"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.12)',
-                      border: '1px solid rgba(255, 255, 255, 0.25)'
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
-                    }}
-                  />
-                </div>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: 10,
+                    letterSpacing: '0.15em',
+                    color: 'rgba(212, 175, 55, 0.5)',
+                    marginBottom: 8,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="请输入姓名"
+                  style={{
+                    width: '100%',
+                    height: 44,
+                    padding: '0 16px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(212, 175, 55, 0.15)',
+                    borderRadius: 0,
+                    color: '#e8e0d0',
+                    fontSize: 13,
+                    outline: 'none',
+                    transition: 'all 0.3s ease',
+                    letterSpacing: '0.05em',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.15)';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                  }}
+                />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-white/90 mb-1.5">邮箱</label>
-              <div className="relative">
-                <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                </svg>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="请输入邮箱地址"
-                  className="w-full h-11 pl-10 pr-4 rounded-xl text-sm outline-none transition-all duration-200 text-white placeholder-white/40"
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.12)',
-                    border: '1px solid rgba(255, 255, 255, 0.25)'
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
-                  }}
-                />
-              </div>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: 10,
+                  letterSpacing: '0.15em',
+                  color: 'rgba(212, 175, 55, 0.5)',
+                  marginBottom: 8,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="请输入邮箱地址"
+                style={{
+                  width: '100%',
+                  height: 44,
+                  padding: '0 16px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(212, 175, 55, 0.15)',
+                  borderRadius: 0,
+                  color: '#e8e0d0',
+                  fontSize: 13,
+                  outline: 'none',
+                  transition: 'all 0.3s ease',
+                  letterSpacing: '0.05em',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.15)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                }}
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/90 mb-1.5">密码</label>
-              <div className="relative">
-                <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="请输入密码"
-                  className="w-full h-11 pl-10 pr-4 rounded-xl text-sm outline-none transition-all duration-200 text-white placeholder-white/40"
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.12)',
-                    border: '1px solid rgba(255, 255, 255, 0.25)'
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
-                  }}
-                />
-              </div>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: 10,
+                  letterSpacing: '0.15em',
+                  color: 'rgba(212, 175, 55, 0.5)',
+                  marginBottom: 8,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="请输入密码"
+                style={{
+                  width: '100%',
+                  height: 44,
+                  padding: '0 16px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(212, 175, 55, 0.15)',
+                  borderRadius: 0,
+                  color: '#e8e0d0',
+                  fontSize: 13,
+                  outline: 'none',
+                  transition: 'all 0.3s ease',
+                  letterSpacing: '0.05em',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.15)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                }}
+              />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-11 rounded-xl text-white font-semibold text-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
               style={{
-                background: 'rgba(255, 255, 255, 0.25)',
-                border: '1px solid rgba(255, 255, 255, 0.4)',
-                backdropFilter: 'blur(10px)'
+                width: '100%',
+                height: 48,
+                marginTop: 8,
+                background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(139, 90, 43, 0.2))',
+                border: '1px solid rgba(212, 175, 55, 0.3)',
+                color: '#d4af37',
+                fontSize: 12,
+                letterSpacing: '0.2em',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.5 : 1,
+                transition: 'all 0.4s ease',
+                position: 'relative',
+                overflow: 'hidden',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.35)';
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(212, 175, 55, 0.35), rgba(139, 90, 43, 0.35))';
+                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.6)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.25)';
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(139, 90, 43, 0.2))';
+                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.3)';
               }}
             >
               {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round">
+                      <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite" />
+                    </path>
                   </svg>
-                  处理中...
+                  PROCESSING
                 </span>
               ) : (
-                isRegister ? '创建账号' : '立即登录'
+                isRegister ? 'CREATE ACCOUNT' : 'SIGN IN'
               )}
             </button>
           </form>
 
           {/* 开发模式 */}
-          <div className="mt-6 pt-5 text-center" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.15)' }}>
+          <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(212, 175, 55, 0.08)', textAlign: 'center' }}>
             <button
               onClick={() => {
                 setUser({ id: 'dev', email: 'dev@ta.com', name: '开发测试' });
@@ -260,21 +532,45 @@ export default function LoginPage() {
                 showToast('已进入开发模式', 'info');
                 navigate('/mobile');
               }}
-              className="text-xs text-white/50 hover:text-white/80 transition-colors flex items-center justify-center gap-1 mx-auto"
+              style={{
+                fontSize: 10,
+                letterSpacing: '0.1em',
+                color: 'rgba(255,255,255,0.2)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'color 0.3s ease',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(212, 175, 55, 0.5)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.2)'; }}
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-              开发模式（跳过登录）
+              DEV MODE — SKIP LOGIN
             </button>
           </div>
         </div>
 
-        {/* 底部版权 */}
-        <p className="text-center text-white/50 text-xs mt-6">
-          助教效率助手 · 让教学更轻松
+        {/* 底部 */}
+        <p
+          style={{
+            textAlign: 'center',
+            fontSize: 9,
+            letterSpacing: '0.2em',
+            color: 'rgba(255,255,255,0.15)',
+            marginTop: 32,
+            textTransform: 'uppercase',
+          }}
+        >
+          Teaching Assistant · Efficiency Tool
         </p>
       </div>
+
+      {/* CSS 动画 */}
+      <style>{`
+        @keyframes breathe {
+          0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+          50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+        }
+      `}</style>
     </div>
   );
 }
