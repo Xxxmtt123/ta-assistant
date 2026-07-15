@@ -34,7 +34,14 @@ export default function App() {
       // 解析 JWT 获取用户信息（简化版，直接从 localStorage 读取）
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        setUser({ id: payload.userId, email: payload.email, name: payload.name });
+        setUser({ id: payload.sub, username: '', name: '' });
+        // 尝试从后端获取完整用户信息
+        fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then(r => r.json())
+          .then(u => { if (u.id) setUser(u); })
+          .catch(() => {});
       } catch {
         localStorage.removeItem('ta_token');
       }
