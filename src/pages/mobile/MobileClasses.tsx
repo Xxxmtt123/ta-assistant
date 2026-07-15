@@ -31,16 +31,18 @@ function getAvatarColor(name: string): string {
   return STUDENT_COLORS[hashName(name) % STUDENT_COLORS.length];
 }
 
-function StudentAvatar({ student, size = 34 }: { student: Student; size?: number }) {
-  if (student.avatar_url) {
+function StudentAvatar({ student, size = 34 }: { student: any; size?: number }) {
+  if (student.avatarUrl || student.avatar_url) {
+    const url = student.avatarUrl || student.avatar_url;
     return (
       <img
-        src={student.avatar_url}
+        src={url}
         alt={student.name}
         style={{
           width: size, height: size, borderRadius: '50%',
           objectFit: 'cover', flexShrink: 0,
         }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
       />
     );
   }
@@ -664,7 +666,7 @@ export default function MobileClasses() {
                       showToast('正在上传头像...', 'info');
                       try {
                         const url = await uploadAvatar(file, stu.id);
-                        const updated = storeStudents.map((s, i) => i === editStudent ? { ...s, avatar_url: url } : s);
+                        const updated = storeStudents.map((s, i) => i === editStudent ? { ...s, avatarUrl: url, avatar_url: url } : s);
                         setStudents(updated);
                         showToast('头像上传成功', 'success');
                       } catch (err: any) {
