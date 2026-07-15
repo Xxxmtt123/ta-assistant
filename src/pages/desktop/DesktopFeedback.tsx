@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
 import { feedbackApi } from '@/services/api';
 import { exportToCsv } from '@/utils/csv';
@@ -42,7 +42,7 @@ const demoFeedbacks: Feedback[] = [];
 type ViewMode = 'setup' | 'notes' | 'result';
 
 export default function DesktopFeedback() {
-  const { students, feedbackList, setFeedbackList, showToast, currentSession } = useAppStore();
+  const { students, feedbackList, setFeedbackList, showToast, currentSession, currentClass } = useAppStore();
   const [viewMode, setViewMode] = useState<ViewMode>('setup');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -94,6 +94,46 @@ export default function DesktopFeedback() {
       if (fb) setEditContent(fb.content);
     }
   }, [viewMode, editingId, feedbackList]);
+
+  const lastInitClassId = useRef<string | null>(null);
+  const isFirstMount = useRef(true);
+
+  // 首次挂载时从缓存恢复状态
+  useEffect(() => {
+    if (!currentClass) return;
+
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      lastInitClassId.current = currentClass.id;
+
+      // 尝试恢复反馈结果
+      const sessionId = currentSession?.id;
+      const cachedList = sessionId
+        ? localStorage.getItem(`feedback_list_${currentClass.id}`)
+        : null;
+      if (cachedList) {
+        try {
+          const parsed: Feedback[] = JSON.parse(cachedList);
+          if (parsed.length > 0) {
+            setFeedbackList(parsed);
+            setViewMode('result');
+          }
+        } catch {}
+      }
+    } else if (currentClass.id !== lastInitClassId.current) {
+      // 真正切换班级时才重置
+      lastInitClassId.current = currentClass.id;
+      setFeedbackList([]);
+      setViewMode('setup');
+    }
+  }, [currentClass, currentSession]);
+
+  // 保存反馈结果到 localStorage
+  useEffect(() => {
+    if (currentClass && feedbackList.length > 0) {
+      localStorage.setItem(`feedback_list_${currentClass.id}`, JSON.stringify(feedbackList));
+    }
+  }, [feedbackList, currentClass]);
 
   const notesFillCount = studentNotes.filter(n => n.performanceNote.trim().length > 0).length;
   const completedCount = feedbackList.filter(f => f.charCount >= 100).length;
