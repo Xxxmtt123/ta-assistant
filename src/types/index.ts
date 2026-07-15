@@ -27,6 +27,7 @@ export interface Student {
   phone: string;
   parentName: string;
   note: string;
+  avatar_url?: string;
   createdAt: string;
 }
 
