@@ -84,6 +84,7 @@ export const sessionApi = {
 // ====== 成绩 ======
 export const scoreApi = {
   list: (sessionId: string) => request<Score[]>(`/api/scores?sessionId=${sessionId}`),
+  getBySession: (sessionId: string) => request<any[]>(`/api/scores?sessionId=${sessionId}`),
   batch: (scores: Partial<Score>[]) =>
     request<void>('/api/scores/batch', { method: 'POST', body: JSON.stringify({ scores }) }),
 };
@@ -91,8 +92,14 @@ export const scoreApi = {
 // ====== 反馈 ======
 export const feedbackApi = {
   list: (sessionId?: string) => request<Feedback[]>(`/api/feedback${sessionId ? `?sessionId=${sessionId}` : ''}`),
-  save: (data: Partial<Feedback>) =>
-    request<Feedback>('/api/feedback', { method: 'POST', body: JSON.stringify(data) }),
+  getBySession: (sessionId: string) => request<any[]>(`/api/feedback?sessionId=${sessionId}`),
+  save: (studentId: string, sessionId: string, content: string, templateType: string) =>
+    request<void>('/api/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ studentId, sessionId, content, templateType, charCount: content.length, status: 'draft' }),
+    }),
+  batch: (items: Array<{ studentId: string; sessionId: string; content: string; templateType: string }>) =>
+    request<void>('/api/feedback/batch', { method: 'POST', body: JSON.stringify({ items }) }),
 };
 
 // ====== 照片 ======
