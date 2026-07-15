@@ -169,7 +169,7 @@ export async function generateSingleFeedback(
   }
 }
 
-// 批量生成（带打字机效果）
+// 批量生成（带打字机效果，最多 10 个并发）
 export async function generateBatchFeedbackStreamed(
   courseContent: string,
   studentNotes: StudentNote[],
@@ -177,8 +177,11 @@ export async function generateBatchFeedbackStreamed(
   onProgress?: (index: number, total: number, result: GenerateResult) => void,
   onChunk?: (studentId: string, partialText: string) => void,
 ): Promise<GenerateResult[]> {
-  const results: GenerateResult[] = [];
-  for (let i = 0; i < studentNotes.length; i++) {
+  const CONCURRENCY = 10;
+  const results: GenerateResult[] = new Array(studentNotes.length);
+  let completed = 0;
+
+  async function processOne(i: number) {
     const note = studentNotes[i];
     try {
       const messages = [
@@ -187,16 +190,21 @@ export async function generateBatchFeedbackStreamed(
       ];
       const content = await aiApi.chatStream(messages, (partialText) => { onChunk?.(note.studentId, partialText); }, {});
       const result: GenerateResult = { studentId: note.studentId, studentName: note.studentName, content, charCount: content.length };
-      results.push(result);
-      onProgress?.(i + 1, studentNotes.length, result);
+      results[i] = result;
     } catch (err) {
       console.error(`生成 ${note.studentName} 的反馈失败:`, err);
-      const fallback = generateFallback(note, courseContent, additionalPrompt);
-      results.push(fallback);
-      onProgress?.(i + 1, studentNotes.length, fallback);
+      results[i] = generateFallback(note, courseContent, additionalPrompt);
     }
+    completed++;
+    onProgress?.(completed, studentNotes.length, results[i]!);
   }
-  return results;
+
+  // 分批并发执行
+  for (let batch = 0; batch < studentNotes.length; batch += CONCURRENCY) {
+    const batchItems = studentNotes.slice(batch, batch + CONCURRENCY).map((_, j) => processOne(batch + j));
+    await Promise.all(batchItems);
+  }
+  return results.filter(Boolean);
 }
 
 // 单个学生流式生成
@@ -220,28 +228,35 @@ export async function generateSingleFeedbackStreamed(
   }
 }
 
-// 批量生成（非流式）
+// 批量生成（非流式，最多 10 个并发）
 export async function generateBatchFeedback(
   courseContent: string,
   studentNotes: StudentNote[],
   additionalPrompt: string,
   onProgress?: (index: number, total: number, result: GenerateResult) => void,
 ): Promise<GenerateResult[]> {
-  const results: GenerateResult[] = [];
-  for (let i = 0; i < studentNotes.length; i++) {
+  const CONCURRENCY = 10;
+  const results: GenerateResult[] = new Array(studentNotes.length);
+  let completed = 0;
+
+  async function processOne(i: number) {
     const note = studentNotes[i];
     try {
       const result = await generateSingleFeedback(courseContent, note, additionalPrompt);
-      results.push(result);
-      onProgress?.(i + 1, studentNotes.length, result);
+      results[i] = result;
     } catch (err) {
       console.error(`生成 ${note.studentName} 的反馈失败:`, err);
-      const fallback = generateFallback(note, courseContent, additionalPrompt);
-      results.push(fallback);
-      onProgress?.(i + 1, studentNotes.length, fallback);
+      results[i] = generateFallback(note, courseContent, additionalPrompt);
     }
+    completed++;
+    onProgress?.(completed, studentNotes.length, results[i]!);
   }
-  return results;
+
+  for (let batch = 0; batch < studentNotes.length; batch += CONCURRENCY) {
+    const batchItems = studentNotes.slice(batch, batch + CONCURRENCY).map((_, j) => processOne(batch + j));
+    await Promise.all(batchItems);
+  }
+  return results.filter(Boolean);
 }
 
 // ====== 本地模板兜底（GY话术风格）======
