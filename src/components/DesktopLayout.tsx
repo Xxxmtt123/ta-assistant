@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
+import ClassSwitcher from '@/components/ClassSwitcher';
 
 const navItems = [
   {
@@ -80,6 +81,9 @@ export default function DesktopLayout({ children }: Props) {
             <div className="brand-sub">效率工具 v1.0</div>
           </div>
         </div>
+
+        {/* 班级切换 */}
+        <ClassSwitcher mode="desktop" />
 
         {/* 导航菜单 */}
         <div className="sidebar-nav">
