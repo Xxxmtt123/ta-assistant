@@ -5,107 +5,132 @@ import { useAppStore } from '@/stores/useAppStore';
 
 type Step = 'welcome' | 'login';
 
-/* 滑块验证组件 */
-function SliderCaptcha({ onVerify }: { onVerify: () => void }) {
+/* 随机算数验证组件 */
+function MathCaptcha({ onVerify }: { onVerify: () => void }) {
   const [verified, setVerified] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const sliderRef = useRef<HTMLDivElement>(null);
-  const startXRef = useRef<number>(0);
-  const handleLeftRef = useRef<number>(3);
+  const [a, setA] = useState(0);
+  const [b, setB] = useState(0);
+  const [op, setOp] = useState('+');
+  const [answer, setAnswer] = useState('');
+  const [error, setError] = useState(false);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (verified) return;
-    setDragging(true);
-    startXRef.current = e.clientX - handleLeftRef.current;
+  const generate = () => {
+    const ops = ['+', '-', '\u00d7'];
+    const op = ops[Math.floor(Math.random() * ops.length)];
+    let a: number, b: number;
+    if (op === '+') {
+      a = Math.floor(Math.random() * 50) + 1;
+      b = Math.floor(Math.random() * 50) + 1;
+    } else if (op === '-') {
+      a = Math.floor(Math.random() * 50) + 10;
+      b = Math.floor(Math.random() * a);
+    } else {
+      a = Math.floor(Math.random() * 12) + 1;
+      b = Math.floor(Math.random() * 12) + 1;
+    }
+    setA(a);
+    setB(b);
+    setOp(op);
+    setAnswer('');
+    setError(false);
+    setVerified(false);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!dragging || !sliderRef.current) return;
-    const track = sliderRef.current;
-    const rect = track.getBoundingClientRect();
-    const x = Math.min(Math.max(e.clientX - startXRef.current, 3), rect.width - 41);
-    handleLeftRef.current = x;
+  useEffect(() => { generate(); }, []);
 
-    const handle = track.querySelector('[data-handle]') as HTMLElement;
-    if (handle) handle.style.left = `${x}px`;
-    const fill = track.querySelector('[data-fill]') as HTMLElement;
-    if (fill) fill.style.width = `${x + 19}px`;
-
-    if (x >= rect.width - 50) {
+  const checkAnswer = () => {
+    let correct: number;
+    if (op === '+') correct = a + b;
+    else if (op === '-') correct = a - b;
+    else correct = a * b;
+    if (parseInt(answer) === correct) {
       setVerified(true);
-      setDragging(false);
+      setError(false);
       onVerify();
+    } else {
+      setError(true);
+      setTimeout(() => { setAnswer(''); setError(false); }, 500);
     }
   };
 
-  const handleMouseUp = () => setDragging(false);
-
   return (
-    <div
-      ref={sliderRef}
-      style={{
-        position: 'relative',
-        height: 44,
-        background: '#e8e8e8',
-        borderRadius: 22,
-        overflow: 'hidden',
-        userSelect: 'none',
-        marginTop: 4,
-      }}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    >
-      <div
-        data-fill
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          height: '100%',
-          background: verified ? '#4CAF50' : '#e94560',
-          width: 0,
-          borderRadius: 22,
-          transition: verified ? 'all 0.3s' : 'none',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: '50%',
-          transform: 'translate(-50%, -50%)',
-          fontSize: 13,
-          color: verified ? '#fff' : '#999',
-          pointerEvents: 'none',
-          zIndex: 1,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {verified ? '验证成功' : '拖动滑块完成验证'}
-      </div>
-      <div
-        data-handle
-        style={{
-          position: 'absolute',
-          top: 3,
-          left: 3,
-          width: 38,
-          height: 38,
-          background: '#fff',
-          borderRadius: '50%',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-          cursor: verified ? 'default' : 'grab',
-          zIndex: 2,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 18,
-          transition: verified ? 'all 0.3s' : 'none',
-        }}
-        onMouseDown={handleMouseDown}
-      >
-        {verified ? '\u2713' : '\u2192'}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '8px 12px',
+        background: verified ? 'rgba(76,175,80,0.15)' : 'rgba(255,255,255,0.06)',
+        border: `1px solid ${verified ? '#4CAF50' : error ? '#e94560' : 'rgba(255,255,255,0.15)'}`,
+        borderRadius: 8,
+        transition: 'all 0.3s',
+      }}>
+        <span style={{
+          fontSize: 16,
+          fontWeight: 700,
+          color: verified ? '#4CAF50' : '#FFD700',
+          fontFamily: "'Courier New', monospace",
+          letterSpacing: 1,
+        }}>
+          {a} {op} {b} = ?
+        </span>
+        <input
+          type="number"
+          value={answer}
+          onChange={(e) => setAnswer(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') checkAnswer(); }}
+          disabled={verified}
+          placeholder="?"
+          style={{
+            width: 48,
+            height: 32,
+            padding: '0 8px',
+            background: verified ? 'rgba(76,175,80,0.2)' : 'rgba(255,255,255,0.08)',
+            border: `1px solid ${verified ? '#4CAF50' : error ? '#e94560' : 'rgba(255,255,255,0.2)'}`,
+            borderRadius: 4,
+            color: '#fff',
+            fontSize: 14,
+            fontFamily: "'Courier New', monospace",
+            textAlign: 'center',
+            outline: 'none',
+          }}
+        />
+        <button
+          type="button"
+          onClick={checkAnswer}
+          disabled={verified || answer === ''}
+          style={{
+            padding: '4px 10px',
+            background: verified ? '#4CAF50' : '#e94560',
+            border: 'none',
+            borderRadius: 4,
+            color: '#fff',
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: verified || answer === '' ? 'default' : 'pointer',
+            opacity: verified || answer === '' ? 0.5 : 1,
+            fontFamily: "'Courier New', monospace",
+          }}
+        >
+          {verified ? 'OK' : 'GO'}
+        </button>
+        {!verified && (
+          <button
+            type="button"
+            onClick={generate}
+            style={{
+              padding: '4px 8px',
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 4,
+              color: '#666',
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            ↻
+          </button>
+        )}
       </div>
     </div>
   );
@@ -503,7 +528,7 @@ export default function LoginPage() {
             </div>
 
             {/* 滑块验证 */}
-            <SliderCaptcha onVerify={() => setCaptchaVerified(true)} />
+            <MathCaptcha onVerify={() => setCaptchaVerified(true)} />
 
             {/* 切换 */}
             <div style={{
