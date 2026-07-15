@@ -1,28 +1,24 @@
-# wrangler.toml — Cloudflare Workers + D1 + R2 配置
+# wrangler.toml — Cloudflare Workers + Supabase 配置
 name = "ta-assistant-api"
 main = "src/workers/index.ts"
 compatibility_date = "2026-01-01"
 
-# D1 数据库绑定
-[[d1_databases]]
-binding = "DB"
-database_name = "ta-assistant-db"
-database_id = "local-dev-database"
+# ====== Supabase 配置 ======
+# 数据库 + Storage + Auth 全部走 Supabase
+# 本地开发通过 .dev.vars 配置（已加入 .gitignore）：
+#   SUPABASE_URL=https://kholxtaprqpnqqcnsnre.supabase.co
+#   SUPABASE_KEY=sb_publishable_xxx
 
 # ====== 豆包（火山方舟）AI 配置 ======
-# 部署后通过 wrangler secret 设置（不要明文写在这里）：
+# 部署后通过 wrangler secret 设置：
 #   wrangler secret put DOUBAO_API_KEY
 #   wrangler secret put DOUBAO_MODEL_ID
 #
-# 本地开发通过 .dev.vars 文件配置（该文件已加入 .gitignore）：
+# 本地开发通过 .dev.vars 文件配置：
 #   DOUBAO_API_KEY=你的API Key
 #   DOUBAO_MODEL_ID=doubao-1-5-pro-32k
 
-# 常用豆包模型 ID（在火山方舟控制台获取）：
-#   doubao-1-5-pro-32k      — 旗舰模型，适合复杂任务
-#   doubao-1-5-lite-32k     — 轻量模型，响应更快
-#   doubao-1-5-vision-pro   — 支持图片理解
-#   doubao-pro-32k          — 通用 Pro 版本
-
 [vars]
 DOUBAO_MODEL_ID = "doubao-1-5-pro-32k"
+SUPABASE_URL = "https://kholxtaprqpnqqcnsnre.supabase.co"
+SUPABASE_KEY = "sb_publishable_0avSGJjQo2gzMhyqB55XWA_8c2WxMOt"
