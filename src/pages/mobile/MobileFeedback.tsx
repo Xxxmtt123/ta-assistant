@@ -81,35 +81,35 @@ export default function MobileFeedback() {
     }
   }, [students.length]);
 
-  // 保存课程内容到 localStorage（按班级缓存）
+  // 保存课程内容到 localStorage（按课次缓存）
   useEffect(() => {
-    if (currentClass && courseContent) {
-      localStorage.setItem(`feedback_course_${currentClass.id}`, courseContent);
-      localStorage.setItem(`feedback_prompt_${currentClass.id}`, additionalPrompt);
+    if (currentSession && courseContent) {
+      localStorage.setItem(`feedback_course_${currentSession.id}`, courseContent);
+      localStorage.setItem(`feedback_prompt_${currentSession.id}`, additionalPrompt);
     }
-  }, [courseContent, additionalPrompt, currentClass]);
+  }, [courseContent, additionalPrompt, currentSession]);
 
   // 页面加载时恢复课程内容
   useEffect(() => {
-    if (currentClass && !courseContent) {
-      const saved = localStorage.getItem(`feedback_course_${currentClass.id}`);
+    if (currentSession && !courseContent) {
+      const saved = localStorage.getItem(`feedback_course_${currentSession.id}`);
       if (saved) setCourseContent(saved);
-      const savedPrompt = localStorage.getItem(`feedback_prompt_${currentClass.id}`);
+      const savedPrompt = localStorage.getItem(`feedback_prompt_${currentSession.id}`);
       if (savedPrompt) setAdditionalPrompt(savedPrompt);
     }
-  }, [currentClass]);
+  }, [currentSession]);
 
   // 保存 studentNotes 到 localStorage
   useEffect(() => {
-    if (currentClass && studentNotes.some(n => n.performanceNote)) {
-      localStorage.setItem(`feedback_notes_${currentClass.id}`, JSON.stringify(studentNotes));
+    if (currentSession && studentNotes.some(n => n.performanceNote)) {
+      localStorage.setItem(`feedback_notes_${currentSession.id}`, JSON.stringify(studentNotes));
     }
-  }, [studentNotes, currentClass]);
+  }, [studentNotes, currentSession]);
 
   // 页面加载时恢复 studentNotes
   useEffect(() => {
-    if (currentClass && students.length > 0) {
-      const savedNotes = localStorage.getItem(`feedback_notes_${currentClass.id}`);
+    if (currentSession && students.length > 0) {
+      const savedNotes = localStorage.getItem(`feedback_notes_${currentSession.id}`);
       if (savedNotes) {
         try {
           const parsed = JSON.parse(savedNotes) as StudentNote[];
@@ -121,7 +121,7 @@ export default function MobileFeedback() {
         }
       }
     }
-  }, [currentClass, students.length]);
+  }, [currentSession, students.length]);
 
   // 页面加载时获取反馈数据
   useEffect(() => {
