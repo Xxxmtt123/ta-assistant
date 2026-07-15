@@ -2,6 +2,21 @@ import type { Env } from '../index';
 import { getSupabaseClient } from '../index';
 import { verifyAuth } from '../middleware/auth';
 
+// snake_case → camelCase 转换
+function toCamelStudent(row: any) {
+  return {
+    id: row.id,
+    classId: row.class_id,
+    name: row.name,
+    studentId: row.student_id,
+    phone: row.phone,
+    parentName: row.parent_name,
+    note: row.note,
+    avatarUrl: row.avatar_url,
+    createdAt: row.created_at,
+  };
+}
+
 export async function handleStudents(request: Request, env: Env) {
   const user = await verifyAuth(request, env);
   if (!user) return new Response(JSON.stringify({ error: '请先登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
@@ -22,7 +37,8 @@ export async function handleStudents(request: Request, env: Env) {
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
-    return new Response(JSON.stringify(data || []), { headers: { 'Content-Type': 'application/json' } });
+    const students = (data || []).map(toCamelStudent);
+    return new Response(JSON.stringify(students), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // 创建学生
@@ -41,13 +57,13 @@ export async function handleStudents(request: Request, env: Env) {
         parent_name: data.parentName || '',
         note: data.note || '',
       })
-      .select('id')
+      .select('*')
       .single();
 
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
-    return new Response(JSON.stringify({ id: newStudent?.id, success: true }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify(toCamelStudent(newStudent)), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // 更新学生
@@ -63,15 +79,19 @@ export async function handleStudents(request: Request, env: Env) {
     if (data.parentName !== undefined) updates.parent_name = data.parentName;
     if (data.note !== undefined) updates.note = data.note;
     if (data.classId !== undefined) updates.class_id = data.classId;
+    if (data.avatarUrl !== undefined) updates.avatar_url = data.avatarUrl;
 
     if (Object.keys(updates).length > 0) {
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('students')
         .update(updates)
-        .eq('id', id);
+        .eq('id', id)
+        .select('*')
+        .single();
       if (error) {
         return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
       }
+      return new Response(JSON.stringify(toCamelStudent(updated)), { headers: { 'Content-Type': 'application/json' } });
     }
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   }
