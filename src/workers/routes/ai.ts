@@ -30,10 +30,7 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
   // 从环境变量获取豆包 API Key
   const apiKey = env.DOUBAO_API_KEY;
   if (!apiKey) {
-    return Response.json(
-      { success: false, error: 'AI 服务未配置，请在 Workers 环境变量中设置 DOUBAO_API_KEY' },
-      { status: 503 }
-    );
+    return new Response(JSON.stringify({ success: false, error: 'AI 服务未配置，请在 Workers 环境变量中设置 DOUBAO_API_KEY' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
   }
 
   // 解析前端请求
@@ -41,7 +38,7 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
   try {
     body = await request.json();
   } catch {
-    return Response.json({ success: false, error: '请求体格式错误' }, { status: 400 });
+    return new Response(JSON.stringify({ success: false, error: '请求体格式错误' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
   const {
@@ -55,7 +52,7 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
   const model = env.DOUBAO_MODEL_ID || bodyModel || 'doubao-1-5-pro-32k';
 
   if (!messages || messages.length === 0) {
-    return Response.json({ success: false, error: 'messages 不能为空' }, { status: 400 });
+    return new Response(JSON.stringify({ success: false, error: 'messages 不能为空' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
   // 构造豆包 API 请求
@@ -83,7 +80,7 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
         const errJson = JSON.parse(errorText);
         errorMsg = errJson.error?.message || errJson.message || errorMsg;
       } catch { /* use default */ }
-      return Response.json({ success: false, error: errorMsg }, { status: response.status });
+      return new Response(JSON.stringify({ success: false, error: errorMsg }), { status: response.status, headers: { 'Content-Type': 'application/json' } });
     }
 
     const data = await response.json();
@@ -92,16 +89,16 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
     const content = data.choices?.[0]?.message?.content || '';
     const usage = data.usage || null;
 
-    return Response.json({
+    return new Response(JSON.stringify({
       success: true,
       data: {
         content,
         usage,
         model: data.model || model,
       },
-    });
+    }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     const message = err instanceof Error ? err.message : '请求豆包 API 失败';
-    return Response.json({ success: false, error: message }, { status: 500 });
+    return new Response(JSON.stringify({ success: false, error: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
