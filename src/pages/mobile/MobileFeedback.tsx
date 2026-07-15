@@ -749,15 +749,16 @@ export default function MobileFeedback() {
                 </div>
 
                 {/* 表现输入框 */}
-                <input
-                  type="text"
+                <textarea
                   value={note?.performanceNote || ''}
                   onChange={(e) => updateNote(student.id, 'performanceNote', e.target.value)}
                   placeholder="输入该学生的课堂表现简要描述..."
+                  rows={2}
                   style={{
                     width: '100%', padding: '8px 12px', borderRadius: 10,
                     border: note?.performanceNote ? `1.5px solid var(--primary)` : '1px solid var(--border)',
                     fontSize: 12, outline: 'none', background: 'var(--bg)',
+                    resize: 'none', lineHeight: 1.5,
                   }}
                 />
               </div>
