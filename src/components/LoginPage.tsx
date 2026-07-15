@@ -1,119 +1,34 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/services/api';
 import { useAppStore } from '@/stores/useAppStore';
 
-/* ─── 粒子背景组件 ─── */
-function ParticleBackground() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+type Step = 'welcome' | 'login';
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let w = canvas.width = window.innerWidth;
-    let h = canvas.height = window.innerHeight;
-
-    const particles: { x: number; y: number; vx: number; vy: number; size: number; alpha: number }[] = [];
-    const count = 80;
-
-    for (let i = 0; i < count; i++) {
-      particles.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3,
-        size: Math.random() * 2 + 0.5,
-        alpha: Math.random() * 0.5 + 0.2,
-      });
-    }
-
-    let raf = 0;
-    const animate = () => {
-      ctx.clearRect(0, 0, w, h);
-      particles.forEach((p) => {
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.x < 0) p.x = w;
-        if (p.x > w) p.x = 0;
-        if (p.y < 0) p.y = h;
-        if (p.y > h) p.y = 0;
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(212, 175, 55, ${p.alpha})`;
-        ctx.fill();
-      });
-
-      // 连线
-      for (let i = 0; i < count; i++) {
-        for (let j = i + 1; j < count; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 150) {
-            ctx.beginPath();
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.strokeStyle = `rgba(212, 175, 55, ${0.08 * (1 - dist / 150)})`;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-        }
-      }
-      raf = requestAnimationFrame(animate);
-    };
-
-    animate();
-
-    const handleResize = () => {
-      w = canvas.width = window.innerWidth;
-      h = canvas.height = window.innerHeight;
-    };
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 1,
-        pointerEvents: 'none',
-      }}
-    />
-  );
-}
-
-/* ─── 主页面 ─── */
 export default function LoginPage() {
+  const [step, setStep] = useState<Step>('welcome');
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [slideIn, setSlideIn] = useState(false);
   const navigate = useNavigate();
   const { setUser, showToast } = useAppStore();
 
   useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 100);
-    return () => clearTimeout(t);
-  }, []);
+    if (step === 'login') {
+      const t = setTimeout(() => setSlideIn(true), 50);
+      return () => clearTimeout(t);
+    } else {
+      setSlideIn(false);
+    }
+  }, [step]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
     setLoading(true);
-
     try {
       if (isRegister) {
         if (!name) { showToast('请输入姓名', 'error'); setLoading(false); return; }
@@ -138,234 +53,267 @@ export default function LoginPage() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        overflow: 'hidden',
-        background: '#0a0a0a',
-      }}
-    >
-      {/* 电影感背景层 */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: `
-            radial-gradient(ellipse at 20% 80%, rgba(139, 90, 43, 0.15) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 20%, rgba(212, 175, 55, 0.08) 0%, transparent 50%),
-            radial-gradient(ellipse at 50% 50%, rgba(30, 30, 35, 0.8) 0%, #0a0a0a 70%)
-          `,
-        }}
-      />
+    <div style={{
+      minHeight: '100vh',
+      background: '#fff',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* ───── 第一步：欢迎页 ───── */}
+      {step === 'welcome' && (
+        <div style={{
+          width: '100%',
+          maxWidth: 400,
+          padding: '0 24px',
+          opacity: 1,
+          transition: 'all 0.5s cubic-bezier(0.22, 1, 0.36, 1)',
+        }}>
+          {/* 顶部导航 */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 32,
+          }}>
+            <span style={{
+              fontSize: 20,
+              fontWeight: 800,
+              color: '#111',
+              letterSpacing: '-0.02em',
+            }}>
+              TA
+            </span>
+            <button
+              onClick={() => setStep('login')}
+              style={{
+                fontSize: 14,
+                color: '#999',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 500,
+              }}
+            >
+              跳过
+            </button>
+          </div>
 
-      {/* 顶部电影光晕 */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '-30%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '120%',
-          height: '80%',
-          background: 'radial-gradient(ellipse, rgba(212, 175, 55, 0.06) 0%, transparent 60%)',
-          filter: 'blur(80px)',
-          animation: 'breathe 8s ease-in-out infinite',
-        }}
-      />
-
-      {/* 底部暗角 vignette */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%)',
-          pointerEvents: 'none',
-        }}
-      />
-
-      {/* 粒子层 */}
-      <ParticleBackground />
-
-      {/* 扫描线效果 */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px)',
-          pointerEvents: 'none',
-          zIndex: 2,
-        }}
-      />
-
-      {/* 内容区 */}
-      <div
-        className="w-full max-w-sm px-6 relative z-10"
-        style={{
-          opacity: mounted ? 1 : 0,
-          transform: mounted ? 'translateY(0)' : 'translateY(30px)',
-          transition: 'all 1.2s cubic-bezier(0.22, 1, 0.36, 1)',
-        }}
-      >
-        {/* 电影胶片装饰线 */}
-        <div
-          style={{
-            position: 'absolute',
-            top: -40,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 1,
-            height: 60,
-            background: 'linear-gradient(to bottom, transparent, rgba(212, 175, 55, 0.4))',
-          }}
-        />
-
-        {/* 主卡片 */}
-        <div
-          style={{
-            background: 'rgba(15, 15, 18, 0.7)',
-            backdropFilter: 'blur(30px) saturate(120%)',
-            WebkitBackdropFilter: 'blur(30px) saturate(120%)',
-            border: '1px solid rgba(212, 175, 55, 0.15)',
-            borderRadius: 4,
-            padding: '48px 36px',
+          {/* 插画区域 */}
+          <div style={{
+            width: '100%',
+            height: 280,
+            borderRadius: 24,
+            background: 'linear-gradient(135deg, #f0f7e6 0%, #e8f5e9 50%, #c8e6c9 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 36,
             position: 'relative',
             overflow: 'hidden',
-          }}
-        >
-          {/* 顶部金色细线 */}
-          <div
-            style={{
+          }}>
+            {/* 装饰圆 */}
+            <div style={{
               position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 1,
-              background: 'linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.5), transparent)',
-            }}
-          />
+              top: -30,
+              right: -30,
+              width: 120,
+              height: 120,
+              borderRadius: '50%',
+              background: 'rgba(76, 175, 80, 0.15)',
+            }} />
+            <div style={{
+              position: 'absolute',
+              bottom: -20,
+              left: -20,
+              width: 80,
+              height: 80,
+              borderRadius: '50%',
+              background: 'rgba(76, 175, 80, 0.1)',
+            }} />
 
-          {/* 角落装饰 */}
-          <div style={{ position: 'absolute', top: 12, left: 12, width: 20, height: 20, borderTop: '1px solid rgba(212, 175, 55, 0.3)', borderLeft: '1px solid rgba(212, 175, 55, 0.3)' }} />
-          <div style={{ position: 'absolute', top: 12, right: 12, width: 20, height: 20, borderTop: '1px solid rgba(212, 175, 55, 0.3)', borderRight: '1px solid rgba(212, 175, 55, 0.3)' }} />
-          <div style={{ position: 'absolute', bottom: 12, left: 12, width: 20, height: 20, borderBottom: '1px solid rgba(212, 175, 55, 0.3)', borderLeft: '1px solid rgba(212, 175, 55, 0.3)' }} />
-          <div style={{ position: 'absolute', bottom: 12, right: 12, width: 20, height: 20, borderBottom: '1px solid rgba(212, 175, 55, 0.3)', borderRight: '1px solid rgba(212, 175, 55, 0.3)' }} />
-
-          {/* Logo */}
-          <div style={{ textAlign: 'center', marginBottom: 40 }}>
-            <div
-              style={{
-                width: 56,
-                height: 56,
-                margin: '0 auto 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '1px solid rgba(212, 175, 55, 0.3)',
-                position: 'relative',
-              }}
-            >
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 4,
-                  border: '1px solid rgba(212, 175, 55, 0.15)',
-                }}
-              />
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" strokeWidth="1">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            {/* 速度线 */}
+            <div style={{ position: 'relative' }}>
+              <svg width="180" height="180" viewBox="0 0 180 180" fill="none">
+                {/* 书本 */}
+                <rect x="55" y="90" width="70" height="50" rx="4" fill="#4CAF50" opacity="0.9" />
+                <rect x="58" y="93" width="64" height="44" rx="2" fill="#fff" opacity="0.8" />
+                <line x1="70" y1="103" x2="110" y2="103" stroke="#81C784" strokeWidth="2" />
+                <line x1="70" y1="111" x2="100" y2="111" stroke="#A5D6A7" strokeWidth="2" />
+                <line x1="70" y1="119" x2="95" y2="119" stroke="#C8E6C9" strokeWidth="2" />
+                {/* 人物 */}
+                <circle cx="90" cy="52" r="16" fill="#FFB74D" />
+                <path d="M70 85 Q90 70 110 85 L110 95 Q110 100 105 100 L75 100 Q70 100 70 95 Z" fill="#4CAF50" />
+                {/* 左手举起 */}
+                <line x1="72" y1="82" x2="58" y2="68" stroke="#FFB74D" strokeWidth="4" strokeLinecap="round" />
+                {/* 右手 -->
+                <line x1="108" y1="82" x2="122" y2="75" stroke="#FFB74D" strokeWidth="4" strokeLinecap="round" />
+                {/* 速度线 */}
+                <line x1="35" y1="65" x2="50" y2="65" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
+                <line x1="40" y1="75" x2="52" y2="75" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" opacity="0.3" />
+                <line x1="38" y1="85" x2="48" y2="85" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" opacity="0.5" />
+                <line x1="130" y1="70" x2="145" y2="70" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" opacity="0.3" />
+                <line x1="128" y1="80" x2="140" y2="80" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
+                {/* 星星 */}
+                <text x="50" y="48" fontSize="16" fill="#FFD54F">✦</text>
+                <text x="120" y="45" fontSize="12" fill="#FFD54F">✦</text>
+                <text x="135" y="90" fontSize="10" fill="#A5D6A7">✦</text>
               </svg>
             </div>
-            <h1
-              style={{
-                fontSize: 22,
-                fontWeight: 300,
-                letterSpacing: '0.3em',
-                color: '#e8e0d0',
-                marginBottom: 8,
-                fontFamily: "'Georgia', 'Times New Roman', serif",
-              }}
-            >
-              助教效率助手
-            </h1>
-            <p
-              style={{
-                fontSize: 11,
-                letterSpacing: '0.15em',
-                color: 'rgba(212, 175, 55, 0.6)',
-                textTransform: 'uppercase',
-              }}
-            >
-              {isRegister ? 'Create Account' : 'Welcome Back'}
-            </p>
           </div>
 
-          {/* 标签切换 */}
-          <div
+          {/* 标题 */}
+          <h1 style={{
+            fontSize: 28,
+            fontWeight: 800,
+            color: '#111',
+            lineHeight: 1.2,
+            marginBottom: 12,
+            letterSpacing: '-0.02em',
+          }}>
+            高效管理，<br />轻松教学
+          </h1>
+          <p style={{
+            fontSize: 15,
+            color: '#888',
+            lineHeight: 1.6,
+            marginBottom: 40,
+          }}>
+            智能助教工具，让班级管理、学生评分、照片收集变得简单高效
+          </p>
+
+          {/* CTA 按钮 */}
+          <button
+            onClick={() => setStep('login')}
             style={{
-              display: 'flex',
-              marginBottom: 32,
-              borderBottom: '1px solid rgba(212, 175, 55, 0.1)',
+              width: '100%',
+              height: 56,
+              borderRadius: 16,
+              background: '#111',
+              color: '#fff',
+              fontSize: 16,
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              letterSpacing: '-0.01em',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.2)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
             }}
           >
-            <button
-              onClick={() => setIsRegister(false)}
-              style={{
-                flex: 1,
-                padding: '12px 0',
-                fontSize: 12,
-                letterSpacing: '0.1em',
-                color: !isRegister ? '#d4af37' : 'rgba(255,255,255,0.3)',
-                background: 'none',
-                border: 'none',
-                borderBottom: !isRegister ? '1px solid #d4af37' : '1px solid transparent',
-                cursor: 'pointer',
-                transition: 'all 0.4s ease',
-                fontWeight: !isRegister ? 400 : 300,
-              }}
-            >
-              登 录
-            </button>
-            <button
-              onClick={() => setIsRegister(true)}
-              style={{
-                flex: 1,
-                padding: '12px 0',
-                fontSize: 12,
-                letterSpacing: '0.1em',
-                color: isRegister ? '#d4af37' : 'rgba(255,255,255,0.3)',
-                background: 'none',
-                border: 'none',
-                borderBottom: isRegister ? '1px solid #d4af37' : '1px solid transparent',
-                cursor: 'pointer',
-                transition: 'all 0.4s ease',
-                fontWeight: isRegister ? 400 : 300,
-              }}
-            >
-              注 册
-            </button>
+            开始使用
+          </button>
+        </div>
+      )}
+
+      {/* ───── 第二步：登录页 ───── */}
+      {step === 'login' && (
+        <div style={{
+          width: '100%',
+          maxWidth: 400,
+          padding: '0 24px',
+          opacity: slideIn ? 1 : 0,
+          transform: slideIn ? 'translateX(0)' : 'translateX(60px)',
+          transition: 'all 0.6s cubic-bezier(0.22, 1, 0.36, 1)',
+        }}>
+          {/* 顶部导航 */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 24,
+          }}>
+            <span style={{
+              fontSize: 20,
+              fontWeight: 800,
+              color: '#111',
+              letterSpacing: '-0.02em',
+            }}>
+              TA
+            </span>
           </div>
 
+          {/* 插画区域 */}
+          <div style={{
+            width: '100%',
+            height: 200,
+            borderRadius: 24,
+            background: 'linear-gradient(135deg, #FFF9C4 0%, #FFF3E0 50%, #FFE0B2 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 28,
+            position: 'relative',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              position: 'absolute',
+              top: -20,
+              left: -20,
+              width: 100,
+              height: 100,
+              borderRadius: '50%',
+              background: 'rgba(255, 193, 7, 0.15)',
+            }} />
+
+            {/* 击掌插画 */}
+            <svg width="160" height="120" viewBox="0 0 160 120" fill="none">
+              {/* 左手 */}
+              <path d="M55 70 L45 50 Q42 44 48 44 L55 44 Q60 44 60 50 L60 62" fill="#64B5F6" stroke="#42A5F5" strokeWidth="1" />
+              <path d="M45 50 L40 45 Q38 40 44 40 L50 42" fill="#64B5F6" />
+              {/* 右手 */}
+              <path d="M105 70 L115 50 Q118 44 112 44 L105 44 Q100 44 100 50 L100 62" fill="#FFB74D" stroke="#FFA726" strokeWidth="1" />
+              <path d="M115 50 L120 45 Q122 40 116 40 L110 42" fill="#FFB74D" />
+              {/* 击掌星星 */}
+              <text x="68" y="35" fontSize="20" fill="#FFD54F">✦</text>
+              <text x="82" y="30" fontSize="14" fill="#FFD54F">✦</text>
+              <text x="75" y="22" fontSize="10" fill="#FFE082">✦</text>
+              <text x="60" y="80" fontSize="8" fill="#90CAF9">✦</text>
+              <text x="95" y="80" fontSize="8" fill="#FFCC80">✦</text>
+            </svg>
+          </div>
+
+          {/* 标题 */}
+          <h1 style={{
+            fontSize: 26,
+            fontWeight: 800,
+            color: '#111',
+            marginBottom: 6,
+            letterSpacing: '-0.02em',
+          }}>
+            {isRegister ? '创建账号' : '欢迎回来！'}
+          </h1>
+          <p style={{
+            fontSize: 14,
+            color: '#999',
+            marginBottom: 32,
+          }}>
+            {isRegister ? '开始你的高效教学之旅' : '登录以继续管理工作'}
+          </p>
+
           {/* 表单 */}
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {isRegister && (
-              <div>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: 10,
-                    letterSpacing: '0.15em',
-                    color: 'rgba(212, 175, 55, 0.5)',
-                    marginBottom: 8,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  Name
-                </label>
+              <div style={{ position: 'relative' }}>
+                <span style={{
+                  position: 'absolute',
+                  left: 16,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontSize: 18,
+                }}>
+                  👤
+                </span>
                 <input
                   type="text"
                   value={name}
@@ -373,42 +321,34 @@ export default function LoginPage() {
                   placeholder="请输入姓名"
                   style={{
                     width: '100%',
-                    height: 44,
-                    padding: '0 16px',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    border: '1px solid rgba(212, 175, 55, 0.15)',
-                    borderRadius: 0,
-                    color: '#e8e0d0',
-                    fontSize: 13,
+                    height: 52,
+                    paddingLeft: 48,
+                    paddingRight: 16,
+                    borderRadius: 14,
+                    border: '2px solid #f0f0f0',
+                    background: '#fff',
+                    fontSize: 14,
+                    color: '#333',
                     outline: 'none',
-                    transition: 'all 0.3s ease',
-                    letterSpacing: '0.05em',
+                    transition: 'border-color 0.3s ease',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                   }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.15)';
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#FFD54F'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#f0f0f0'; }}
                 />
               </div>
             )}
 
-            <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: 10,
-                  letterSpacing: '0.15em',
-                  color: 'rgba(212, 175, 55, 0.5)',
-                  marginBottom: 8,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Email
-              </label>
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute',
+                left: 16,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: 18,
+              }}>
+                ✉️
+              </span>
               <input
                 type="email"
                 value={email}
@@ -416,41 +356,33 @@ export default function LoginPage() {
                 placeholder="请输入邮箱地址"
                 style={{
                   width: '100%',
-                  height: 44,
-                  padding: '0 16px',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(212, 175, 55, 0.15)',
-                  borderRadius: 0,
-                  color: '#e8e0d0',
-                  fontSize: 13,
+                  height: 52,
+                  paddingLeft: 48,
+                  paddingRight: 16,
+                  borderRadius: 14,
+                  border: '2px solid #f0f0f0',
+                  background: '#fff',
+                  fontSize: 14,
+                  color: '#333',
                   outline: 'none',
-                  transition: 'all 0.3s ease',
-                  letterSpacing: '0.05em',
+                  transition: 'border-color 0.3s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                 }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.15)';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#FFD54F'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#f0f0f0'; }}
               />
             </div>
 
-            <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: 10,
-                  letterSpacing: '0.15em',
-                  color: 'rgba(212, 175, 55, 0.5)',
-                  marginBottom: 8,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Password
-              </label>
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute',
+                left: 16,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: 18,
+              }}>
+                🔒
+              </span>
               <input
                 type="password"
                 value={password}
@@ -458,73 +390,88 @@ export default function LoginPage() {
                 placeholder="请输入密码"
                 style={{
                   width: '100%',
-                  height: 44,
-                  padding: '0 16px',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(212, 175, 55, 0.15)',
-                  borderRadius: 0,
-                  color: '#e8e0d0',
-                  fontSize: 13,
+                  height: 52,
+                  paddingLeft: 48,
+                  paddingRight: 16,
+                  borderRadius: 14,
+                  border: '2px solid #f0f0f0',
+                  background: '#fff',
+                  fontSize: 14,
+                  color: '#333',
                   outline: 'none',
-                  transition: 'all 0.3s ease',
-                  letterSpacing: '0.05em',
+                  transition: 'border-color 0.3s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                 }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.15)';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#FFD54F'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#f0f0f0'; }}
               />
             </div>
 
+            {/* 底部操作行 */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginTop: 4,
+            }}>
+              <span style={{ fontSize: 13, color: '#999' }}>
+                忘记密码？
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsRegister(!isRegister)}
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#111',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 2,
+                }}
+              >
+                {isRegister ? '去登录' : '注册账号'}
+              </button>
+            </div>
+
+            {/* 提交按钮 */}
             <button
               type="submit"
               disabled={loading}
               style={{
                 width: '100%',
-                height: 48,
-                marginTop: 8,
-                background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(139, 90, 43, 0.2))',
-                border: '1px solid rgba(212, 175, 55, 0.3)',
-                color: '#d4af37',
-                fontSize: 12,
-                letterSpacing: '0.2em',
+                height: 56,
+                borderRadius: 16,
+                background: '#111',
+                color: '#fff',
+                fontSize: 16,
+                fontWeight: 600,
+                border: 'none',
                 cursor: loading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                marginTop: 8,
+                letterSpacing: '-0.01em',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
                 opacity: loading ? 0.5 : 1,
-                transition: 'all 0.4s ease',
-                position: 'relative',
-                overflow: 'hidden',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(212, 175, 55, 0.35), rgba(139, 90, 43, 0.35))';
-                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.6)';
+                if (!loading) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.2)';
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(139, 90, 43, 0.2))';
-                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.3)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
               }}
             >
-              {loading ? (
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                    <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round">
-                      <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite" />
-                    </path>
-                  </svg>
-                  PROCESSING
-                </span>
-              ) : (
-                isRegister ? 'CREATE ACCOUNT' : 'SIGN IN'
-              )}
+              {loading ? '处理中...' : (isRegister ? '创建账号' : '登录')}
             </button>
           </form>
 
           {/* 开发模式 */}
-          <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(212, 175, 55, 0.08)', textAlign: 'center' }}>
+          <div style={{ marginTop: 28, textAlign: 'center' }}>
             <button
               onClick={() => {
                 setUser({ id: 'dev', email: 'dev@ta.com', name: '开发测试' });
@@ -533,44 +480,18 @@ export default function LoginPage() {
                 navigate('/mobile');
               }}
               style={{
-                fontSize: 10,
-                letterSpacing: '0.1em',
-                color: 'rgba(255,255,255,0.2)',
+                fontSize: 11,
+                color: '#ccc',
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                transition: 'color 0.3s ease',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(212, 175, 55, 0.5)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.2)'; }}
             >
-              DEV MODE — SKIP LOGIN
+              开发模式（跳过登录）
             </button>
           </div>
         </div>
-
-        {/* 底部 */}
-        <p
-          style={{
-            textAlign: 'center',
-            fontSize: 9,
-            letterSpacing: '0.2em',
-            color: 'rgba(255,255,255,0.15)',
-            marginTop: 32,
-            textTransform: 'uppercase',
-          }}
-        >
-          Teaching Assistant · Efficiency Tool
-        </p>
-      </div>
-
-      {/* CSS 动画 */}
-      <style>{`
-        @keyframes breathe {
-          0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
-          50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
-        }
-      `}</style>
+      )}
     </div>
   );
 }
