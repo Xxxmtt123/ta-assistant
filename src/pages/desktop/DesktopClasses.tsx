@@ -107,6 +107,9 @@ export default function DesktopClasses() {
   const [formStudentCount, setFormStudentCount] = useState(8);
   const [formDates, setFormDates] = useState<string[]>(DEFAULT_CONTINUOUS_DATES);
 
+  // 日期选择器 ref（连续上课模式用）
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
   // 挂载时从后端加载班级列表
   useEffect(() => {
     (async () => {
@@ -254,8 +257,36 @@ export default function DesktopClasses() {
   };
 
   const addDate = () => {
-    const newDate = `新增日期 ${formDates.length + 1}`;
-    setFormDates([...formDates, newDate]);
+    if (dateInputRef.current) {
+      if (typeof dateInputRef.current.showPicker === 'function') {
+        dateInputRef.current.showPicker();
+      } else {
+        dateInputRef.current.style.pointerEvents = 'auto';
+        dateInputRef.current.style.opacity = '1';
+        dateInputRef.current.style.position = 'fixed';
+        dateInputRef.current.style.top = '50%';
+        dateInputRef.current.style.left = '50%';
+        dateInputRef.current.style.transform = 'translate(-50%, -50%)';
+        dateInputRef.current.style.zIndex = '99999';
+        dateInputRef.current.focus();
+        dateInputRef.current.click();
+      }
+    }
+  };
+
+  const handleDesktopDateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const dateStr = e.target.value;
+    if (!dateStr) return;
+    const d = new Date(dateStr);
+    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const label = `${d.getMonth() + 1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
+    if (formDates.includes(label)) {
+      showToast('该日期已添加', 'error');
+      e.target.value = '';
+      return;
+    }
+    setFormDates([...formDates, label]);
+    e.target.value = '';
   };
 
   const quickSetDates = (pattern: string) => {
@@ -310,6 +341,14 @@ export default function DesktopClasses() {
 
   return (
     <div>
+      {/* 隐藏的原生日期选择器（连续上课模式用） */}
+      <input
+        ref={dateInputRef}
+        type="date"
+        onChange={handleDesktopDateSelect}
+        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+      />
+
       {/* 面包屑 */}
       <div className="page-breadcrumb">首页 / <span>班级管理</span></div>
 
