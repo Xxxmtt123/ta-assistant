@@ -162,7 +162,7 @@ export default function MobileClasses() {
   };
 
   const isWeekly = semester !== 'summer';
-  const students = storeStudents.length > 0
+  const students = (storeStudents && storeStudents.length > 0)
     ? storeStudents.map((s, i) => ({
         ...s,
         attendance: 10 + (i % 3),
