@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAppStore } from '@/stores/useAppStore';
+import { classApi, studentApi } from '@/services/api';
 import Toast from '@/components/Toast';
 import LoginPage from '@/components/LoginPage';
 import MobileLayout from '@/components/MobileLayout';
@@ -24,29 +25,61 @@ import DesktopLibrary from '@/pages/desktop/DesktopLibrary';
 import DesktopSettings from '@/pages/desktop/DesktopSettings';
 import DesktopAttendance from '@/pages/desktop/DesktopAttendance';
 
-export default function App() {
-  const { user, setUser, isMobile } = useAppStore();
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://ta-assistant-api.2144961248.workers.dev';
 
-  // 检查已登录状态
+export default function App() {
+  const { user, setUser, isMobile, setClasses, setStudents } = useAppStore();
+
+  // 检查已登录状态 + 加载数据
   useEffect(() => {
     const token = localStorage.getItem('ta_token');
     if (token && !user) {
-      // 解析 JWT 获取用户信息（简化版，直接从 localStorage 读取）
       try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setUser({ id: payload.sub, username: '', name: '' });
-        // 尝试从后端获取完整用户信息
-        fetch('/api/auth/me', {
+        // 从后端获取完整用户信息
+        fetch(`${API_BASE}/api/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         })
-          .then(r => r.json())
-          .then(u => { if (u.id) setUser(u); })
-          .catch(() => {});
+          .then(r => {
+            if (!r.ok) throw new Error('Token expired');
+            return r.json();
+          })
+          .then(u => {
+            if (u.id) setUser(u);
+            else throw new Error('Invalid user');
+          })
+          .catch(() => {
+            localStorage.removeItem('ta_token');
+          });
       } catch {
         localStorage.removeItem('ta_token');
       }
     }
   }, [user, setUser]);
+
+  // 登录后自动加载班级数据
+  useEffect(() => {
+    if (user) {
+      loadInitialData();
+    }
+  }, [user]);
+
+  async function loadInitialData() {
+    try {
+      const classList = await classApi.list();
+      setClasses(classList);
+      // 如果有班级，加载第一个班级的学生
+      if (classList.length > 0) {
+        try {
+          const studentList = await studentApi.getByClass(classList[0].id);
+          setStudents(studentList);
+        } catch (e) {
+          console.error('Failed to load students:', e);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load classes:', e);
+    }
+  }
 
   // 未登录 → 登录页
   if (!user) {
