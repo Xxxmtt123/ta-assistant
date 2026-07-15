@@ -112,7 +112,7 @@ export default function DesktopClasses() {
     (async () => {
       try {
         const list = await classApi.list();
-        setClasses(list);
+        setClasses(list || []);
       } catch (err: any) {
         showToast(err.message || '加载班级列表失败', 'error');
       }
