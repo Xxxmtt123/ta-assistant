@@ -21,15 +21,17 @@ function getAvatarColor(name: string): string {
 }
 
 function Avatar({ student, size = 32 }: { student: Student; size?: number }) {
-  if (student.avatar_url) {
+  const avatarUrl = (student as any).avatarUrl || student.avatar_url;
+  if (avatarUrl) {
     return (
       <img
-        src={student.avatar_url}
+        src={avatarUrl}
         alt={student.name}
         style={{
           width: size, height: size, borderRadius: '50%',
           objectFit: 'cover', flexShrink: 0,
         }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
       />
     );
   }
