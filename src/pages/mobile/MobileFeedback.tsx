@@ -42,7 +42,7 @@ type ViewMode = 'setup' | 'notes' | 'result';
 
 export default function MobileFeedback() {
   const { students } = useStudents();
-  const { currentStudentIndex, setCurrentStudentIndex, showToast, feedbackList, setFeedbackList, currentSession } = useAppStore();
+  const { currentStudentIndex, setCurrentStudentIndex, showToast, feedbackList, setFeedbackList, currentSession, currentClass } = useAppStore();
   const [viewMode, setViewMode] = useState<'setup' | 'notes' | 'result'>('setup');
   const [editContent, setEditContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -81,15 +81,60 @@ export default function MobileFeedback() {
     }
   }, [students.length]);
 
+  // 保存课程内容到 localStorage（按班级缓存）
+  useEffect(() => {
+    if (currentClass && courseContent) {
+      localStorage.setItem(`feedback_course_${currentClass.id}`, courseContent);
+      localStorage.setItem(`feedback_prompt_${currentClass.id}`, additionalPrompt);
+    }
+  }, [courseContent, additionalPrompt, currentClass]);
+
+  // 页面加载时恢复课程内容
+  useEffect(() => {
+    if (currentClass && !courseContent) {
+      const saved = localStorage.getItem(`feedback_course_${currentClass.id}`);
+      if (saved) setCourseContent(saved);
+      const savedPrompt = localStorage.getItem(`feedback_prompt_${currentClass.id}`);
+      if (savedPrompt) setAdditionalPrompt(savedPrompt);
+    }
+  }, [currentClass]);
+
+  // 保存 studentNotes 到 localStorage
+  useEffect(() => {
+    if (currentClass && studentNotes.some(n => n.performanceNote)) {
+      localStorage.setItem(`feedback_notes_${currentClass.id}`, JSON.stringify(studentNotes));
+    }
+  }, [studentNotes, currentClass]);
+
+  // 页面加载时恢复 studentNotes
+  useEffect(() => {
+    if (currentClass && students.length > 0) {
+      const savedNotes = localStorage.getItem(`feedback_notes_${currentClass.id}`);
+      if (savedNotes) {
+        try {
+          const parsed = JSON.parse(savedNotes) as StudentNote[];
+          if (parsed.length === students.length) {
+            setStudentNotes(parsed);
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
+    }
+  }, [currentClass, students.length]);
+
   // 页面加载时获取反馈数据
   useEffect(() => {
-    if (currentSession) {
-      loadFeedback();
-    }
-  }, [currentSession]);
+    loadFeedback();
+  }, [currentSession?.id]);
 
   async function loadFeedback() {
-    if (!currentSession) return;
+    if (!currentSession) {
+      if (currentClass) {
+        showToast('请先选择课次', 'info');
+      }
+      return;
+    }
     try {
       const list = await feedbackApi.getBySession(currentSession.id);
       const formatted = list.map((f: any) => ({
@@ -103,7 +148,11 @@ export default function MobileFeedback() {
         createdAt: f.created_at || new Date().toISOString().slice(0, 10),
       }));
       setFeedbackList(formatted);
-    } catch (e) {
+      if (formatted.length > 0) {
+        setViewMode('result');
+      }
+    } catch (e: any) {
+      console.error('加载反馈失败:', e);
       showToast('加载反馈失败', 'error');
     }
   }
