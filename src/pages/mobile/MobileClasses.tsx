@@ -308,10 +308,50 @@ export default function MobileClasses() {
     showToast('已快捷设置日期', 'success');
   };
 
-  // 添加连续上课日期
+  // 日期选择器 ref（连续上课模式用）
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
+  // 添加连续上课日期 — 打开原生日期选择器
   const addContDate = () => {
-    const nextIdx = formContDates.length + 1;
-    setFormContDates([...formContDates, `日期 ${nextIdx}`]);
+    if (dateInputRef.current) {
+      if (typeof dateInputRef.current.showPicker === 'function') {
+        dateInputRef.current.showPicker();
+      } else {
+        // 降级：让 input 变为可见并聚焦
+        dateInputRef.current.style.pointerEvents = 'auto';
+        dateInputRef.current.style.opacity = '1';
+        dateInputRef.current.style.position = 'fixed';
+        dateInputRef.current.style.top = '50%';
+        dateInputRef.current.style.left = '50%';
+        dateInputRef.current.style.transform = 'translate(-50%, -50%)';
+        dateInputRef.current.style.zIndex = '99999';
+        dateInputRef.current.focus();
+        dateInputRef.current.click();
+      }
+    }
+  };
+
+  // 原生日期选择器选中后的回调
+  const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const dateStr = e.target.value; // "2026-07-15"
+    if (!dateStr) return;
+
+    // 转换为中文格式
+    const d = new Date(dateStr);
+    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const label = `${d.getMonth() + 1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
+
+    // 检查是否已存在
+    if (formContDates.includes(label)) {
+      showToast('该日期已添加', 'error');
+      e.target.value = '';
+      return;
+    }
+
+    setFormContDates([...formContDates, label]);
+
+    // 清空 input 以便选择下一个日期
+    e.target.value = '';
   };
 
   // 删除连续上课日期
@@ -321,6 +361,13 @@ export default function MobileClasses() {
 
   return (
     <>
+      {/* 隐藏的原生日期选择器（连续上课模式用） */}
+      <input
+        ref={dateInputRef}
+        type="date"
+        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+        onChange={handleDateSelect}
+      />
       {/* 班级列表视图 */}
       <div className={`class-list-view ${showDetail ? 'hidden' : ''}`}>
         <div className="m-section-title">今日有课</div>
@@ -541,7 +588,7 @@ export default function MobileClasses() {
                         </div>
                       ))}
                     </div>
-                    <button className="add-date-btn" onClick={() => showToast('已打开日期选择器', 'info')}>+ 添加上课日期</button>
+                    <button className="add-date-btn" onClick={addContDate}>+ 添加上课日期</button>
                   </div>
                   <div className="time-row">
                     <label>上课</label>
