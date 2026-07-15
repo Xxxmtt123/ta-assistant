@@ -1,8 +1,8 @@
 import type { User, Class, Student, Session, Score, Feedback, Photo } from '@/types';
 
 // 本地开发走 Vite proxy（/api → http://127.0.0.1:8787）
-// 生产环境走相对路径（Workers Pages 同域）
-const API_BASE = import.meta.env.VITE_API_BASE || '';
+// 生产环境指向 Cloudflare Workers
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://ta-assistant-api.2144961248.workers.dev';
 
 function getToken(): string | null {
   return localStorage.getItem('ta_token');
@@ -41,15 +41,15 @@ async function request<T>(
 
 // ====== 认证 ======
 export const authApi = {
-  register: (name: string, email: string, password: string) =>
+  register: (username: string, password: string, name: string) =>
     request<{ token: string; user: User }>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ username, password, name }),
     }),
-  login: (email: string, password: string) =>
+  login: (username: string, password: string) =>
     request<{ token: string; user: User }>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     }),
   me: () => request<User>('/api/auth/me'),
 };
@@ -114,11 +114,11 @@ export const photoApi = {
     });
 
     if (!res.ok) throw new Error('照片上传失败');
-    return res.json() as Promise<{ success: boolean; id: string; thumbnailUrl: string }>;
+    return res.json() as Promise<{ success: boolean; id: string; thumbnailUrl: string; url: string }>;
   },
   getBySession: (sessionId: string) => request<Photo[]>(`/api/photos?sessionId=${sessionId}`),
-  // 获取照片完整数据（含 base_data）用于打包下载
-  getDataForDownload: (sessionId: string) => request<Array<{ id: string; studentName: string; studentId: string; type: string; baseData: string; mimeType: string }>>(`/api/photos/data?sessionId=${sessionId}`),
+  // 获取照片数据用于打包下载（现在返回 URL 而非 base64）
+  getDataForDownload: (sessionId: string) => request<Array<{ id: string; studentName: string; studentId: string; type: string; url: string; mimeType: string }>>(`/api/photos/data?sessionId=${sessionId}`),
 };
 
 // ====== AI（DeepSeek）======
