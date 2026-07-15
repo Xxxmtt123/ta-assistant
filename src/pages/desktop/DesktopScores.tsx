@@ -4,18 +4,30 @@ import { scoreApi } from '@/services/api';
 import { exportToCsv } from '@/utils/csv';
 import type { Score } from '@/types';
 
-const AVATAR_COLORS = ['#4F46E5', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#06B6D4', '#F97316'];
-
-function hashName(name: string): number {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+function StudentAvatar({ student, size = 32 }: { student: any; size?: number }) {
+  const avatarUrl = student?.avatarUrl || student?.avatar_url;
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={student?.name || ''}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
   }
-  return Math.abs(hash);
-}
-
-function getAvatarColor(name: string): string {
-  return AVATAR_COLORS[hashName(name) % AVATAR_COLORS.length];
+  const COLORS = ['#e94560', '#0f3460', '#FFD700', '#16c79a', '#bb86fc', '#ff7043'];
+  const hash = (student?.name || '').split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%',
+      background: COLORS[hash % COLORS.length], color: '#fff',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.4, fontWeight: 700, flexShrink: 0,
+    }}>
+      {(student?.name || '?')[0]}
+    </div>
+  );
 }
 
 const ATTENDANCE_OPTIONS: Array<{ val: Score['attendance']; label: string }> = [
@@ -228,22 +240,11 @@ export default function DesktopScores() {
             <tbody>
               {sessionScores.map((score) => {
                 const student = students.find((s) => s.id === score.studentId);
-                const color = student ? getAvatarColor(student.name) : AVATAR_COLORS[0];
                 return (
                   <tr key={score.id}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div
-                          style={{
-                            width: '32px', height: '32px', borderRadius: '50%',
-                            background: color,
-                            color: 'white',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '12px', fontWeight: 700, flexShrink: 0,
-                          }}
-                        >
-                          {student?.name.charAt(0) || '?'}
-                        </div>
+                        <StudentAvatar student={student} size={32} />
                         <span style={{ fontWeight: 600 }}>{student?.name || '未知'}</span>
                       </div>
                     </td>
