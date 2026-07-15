@@ -1,5 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useAppStore } from '@/stores/useAppStore';
 
 interface Tab {
   icon: ReactNode;
@@ -52,13 +54,110 @@ interface Props {
 export default function MobileLayout({ children }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { classes, currentClass, setCurrentClass } = useAppStore();
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const activeTab = tabs.findIndex(
     (tab) => tab.path === location.pathname || location.pathname.startsWith(tab.path + '/')
   );
 
+  // 智能匹配当前班级
+  useEffect(() => {
+    if (classes.length > 0 && !currentClass) {
+      autoSelectClass();
+    }
+  }, [classes]);
+
+  function autoSelectClass() {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0=Sun, 6=Sat
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+
+    // 尝试匹配今天上课的班级
+    const todayClass = classes.find(c => {
+      if (c.scheduleMode === 'weekly') {
+        const config = typeof c.scheduleConfig === 'string' ? JSON.parse(c.scheduleConfig) : c.scheduleConfig;
+        const days = config?.days || []; // [1,3,5] 表示周一三五
+        if (days.includes(dayOfWeek === 0 ? 7 : dayOfWeek)) {
+          // 检查时间是否在上课时段内
+          const [sh, sm] = (config?.startTime || '09:00').split(':').map(Number);
+          const [eh, em] = (config?.endTime || '18:00').split(':').map(Number);
+          const startTime = sh * 60 + sm;
+          const endTime = eh * 60 + em;
+          // 如果当前时间在上课前1小时内也算匹配
+          return currentTime >= startTime - 60 && currentTime <= endTime;
+        }
+      }
+      return false;
+    });
+
+    setCurrentClass(todayClass || classes[0] || null);
+  }
+
+  // 点击外部关闭下拉
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)', maxWidth: '430px', margin: '0 auto', position: 'relative' }}>
+      {/* 班级切换栏 */}
+      {classes.length > 1 && (
+        <div style={{
+          height: 40, background: 'var(--bg-white)',
+          borderBottom: '1px solid var(--border-light)',
+          display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 16px', flexShrink: 0,
+          position: 'relative', zIndex: 40,
+        }} ref={dropdownRef}>
+          <span style={{
+            fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            maxWidth: '70%',
+          }}>
+            {currentClass?.name || '选择班级'}
+          </span>
+          <button onClick={() => setShowDropdown(!showDropdown)} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 16, padding: '4px 8px',
+            transform: showDropdown ? 'rotate(180deg)' : 'none',
+            transition: 'transform 0.2s',
+          }}>
+            ▾
+          </button>
+          {showDropdown && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0,
+              background: 'var(--bg-white)', borderRadius: '0 0 8px 8px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              maxHeight: 200, overflowY: 'auto', zIndex: 100,
+            }}>
+              {classes.map(cls => (
+                <button key={cls.id}
+                  onClick={() => { setCurrentClass(cls); setShowDropdown(false); }}
+                  style={{
+                    width: '100%', padding: '10px 16px', border: 'none',
+                    background: cls.id === currentClass?.id ? 'var(--primary-light)' : 'transparent',
+                    color: cls.id === currentClass?.id ? 'var(--primary)' : 'var(--text-primary)',
+                    textAlign: 'left', fontSize: 14, cursor: 'pointer',
+                    borderBottom: '1px solid var(--border-light)',
+                  }}>
+                  {cls.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 内容区 */}
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '70px' }}>
         {children}
