@@ -69,17 +69,27 @@ export default function MobileFeedback() {
     students.map(s => ({ studentId: s.id, studentName: s.name, performanceNote: '', performanceLevel: 'good' }))
   );
 
-  // 同步 studentNotes 跟 students
+  // 同步 studentNotes 跟 students（班级切换时重新初始化）
+  const lastInitClassId = useRef<string | null>(null);
   useEffect(() => {
-    if (students.length > 0 && studentNotes.length !== students.length) {
+    const classId = currentClass?.id || '';
+    if (classId && classId !== lastInitClassId.current && students.length > 0) {
+      lastInitClassId.current = classId;
       setStudentNotes(students.map(s => ({
         studentId: s.id,
         studentName: s.name,
         performanceNote: '',
         performanceLevel: 'good',
       })));
+      // 切换班级时清空反馈列表和课程内容
+      setFeedbackList([]);
+      setCourseContent('');
+      setAdditionalPrompt('');
+      setViewMode('setup');
+      setCurrentResultId(null);
+      setStreamingContent({});
     }
-  }, [students.length]);
+  }, [currentClass?.id, students]);
 
   // 保存课程内容到 localStorage（按课次缓存）
   useEffect(() => {
