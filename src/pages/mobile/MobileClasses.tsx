@@ -308,6 +308,14 @@ export default function MobileClasses() {
     showToast('已快捷设置日期', 'success');
   };
 
+  // 排课设置 tab 快捷设置（连续模式）
+  const setQuickDays = (days: number[]) => {
+    setStartTime('09:00');
+    setEndTime('11:30');
+    setActiveDays(days);
+    showToast(`已设置为${days.length === 7 ? '每天' : days.length === 6 ? '周一至周六' : '周一至周五'}连续上课`, 'success');
+  };
+
   // 日期选择器 ref（连续上课模式用）
   const dateInputRef = useRef<HTMLInputElement>(null);
 
@@ -592,18 +600,18 @@ export default function MobileClasses() {
                   </div>
                   <div className="time-row">
                     <label>上课</label>
-                    <input type="time" value="09:00" />
+                    <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
                   </div>
                   <div className="time-row">
                     <label>下课</label>
-                    <input type="time" value="11:30" />
+                    <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
                   </div>
                   <div style={{ background: 'var(--bg)', borderRadius: 'var(--radius-sm)', padding: 12, marginTop: 10 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>快捷设置</div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button className="m-btn m-btn-sm m-btn-outline" style={{ flex: 1, minWidth: 'auto' }} onClick={() => showToast('已设置为周一至周五连续上课', 'success')}>周一至周五</button>
-                      <button className="m-btn m-btn-sm m-btn-outline" style={{ flex: 1, minWidth: 'auto' }} onClick={() => showToast('已设置为周一至周六连续上课', 'success')}>周一至周六</button>
-                      <button className="m-btn m-btn-sm m-btn-outline" style={{ flex: 1, minWidth: 'auto' }} onClick={() => showToast('已设置为每天连续上课', 'success')}>每天</button>
+                      <button className="m-btn m-btn-sm m-btn-outline" style={{ flex: 1, minWidth: 'auto' }} onClick={() => setQuickDays([1,2,3,4,5])}>周一至周五</button>
+                      <button className="m-btn m-btn-sm m-btn-outline" style={{ flex: 1, minWidth: 'auto' }} onClick={() => setQuickDays([1,2,3,4,5,6])}>周一至周六</button>
+                      <button className="m-btn m-btn-sm m-btn-outline" style={{ flex: 1, minWidth: 'auto' }} onClick={() => setQuickDays([1,2,3,4,5,6,0])}>每天</button>
                     </div>
                   </div>
                 </div>
