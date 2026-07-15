@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
-import { classApi } from '@/services/api';
-import { cacheStudents } from '@/db';
+import { studentApi } from '@/services/api';
 import type { Student } from '@/types';
 
 export function useStudents(classId?: string) {
-  const { students, setStudents, currentClass, showToast } = useAppStore();
+  const students = useAppStore((s) => s.students);
+  const setStudents = useAppStore((s) => s.setStudents);
+  const currentClass = useAppStore((s) => s.currentClass);
+  const showToast = useAppStore((s) => s.showToast);
 
   const effectiveClassId = classId || currentClass?.id;
 
@@ -16,11 +18,9 @@ export function useStudents(classId?: string) {
 
     async function loadStudents() {
       try {
-        const classId = effectiveClassId!;
-        const data: Student[] = await classApi.getStudents(classId);
+        const data: Student[] = await studentApi.getByClass(effectiveClassId!);
         if (!cancelled) {
-          setStudents(data);
-          cacheStudents(data);
+          setStudents(data || []);
         }
       } catch {
         if (!cancelled) showToast('加载学生列表失败', 'error');
@@ -29,7 +29,7 @@ export function useStudents(classId?: string) {
 
     loadStudents();
     return () => { cancelled = true; };
-  }, [effectiveClassId, setStudents, showToast]);
+  }, [effectiveClassId]);
 
-  return { students };
+  return { students: students || [] };
 }
