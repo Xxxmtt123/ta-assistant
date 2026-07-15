@@ -1,13 +1,9 @@
-import { SignJWT, jwtVerify } from 'jose';
-
 export interface JwtPayload {
   userId: string;
-  email: string;
-  name: string;
 }
 
-// 从请求中提取并验证 JWT
-export async function verifyAuth(request: Request, env: { JWT_SECRET: string }): Promise<JwtPayload | null> {
+// 从请求中提取并验证 JWT（使用 Web Crypto API，不依赖 jose）
+export async function verifyAuth(request: Request, env: { SUPABASE_KEY: string }): Promise<JwtPayload | null> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return null;
@@ -15,30 +11,35 @@ export async function verifyAuth(request: Request, env: { JWT_SECRET: string }):
 
   const token = authHeader.slice(7);
   try {
-    const secret = new TextEncoder().encode(env.JWT_SECRET);
-    const { payload } = await jwtVerify(token, secret);
-    return payload as unknown as JwtPayload;
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+
+    const [headerB64, payloadB64, sigB64] = parts;
+
+    // 验证签名
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(env.SUPABASE_KEY),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify']
+    );
+
+    const signature = Uint8Array.from(atob(sigB64), c => c.charCodeAt(0));
+    const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+    const valid = await crypto.subtle.verify('HMAC', key, signature, data);
+    if (!valid) return null;
+
+    // 解析 payload
+    const payload = JSON.parse(atob(payloadB64));
+
+    // 检查过期
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      return null;
+    }
+
+    return { userId: payload.sub };
   } catch {
     return null;
   }
-}
-
-// 生成 JWT
-export async function signToken(payload: JwtPayload, secret: string): Promise<string> {
-  const key = new TextEncoder().encode(secret);
-  return new SignJWT(payload as unknown as Record<string, unknown>)
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('7d')
-    .sign(key);
-}
-
-// 简单密码哈希（生产环境应使用 bcrypt，但 Workers 不支持）
-export async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
 }
