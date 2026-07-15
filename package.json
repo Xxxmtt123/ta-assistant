@@ -1,0 +1,37 @@
+{
+  "name": "ta-assistant-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260713.1",
+    "@tailwindcss/vite": "^4.3.2",
+    "@types/jszip": "^3.4.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@types/react-router-dom": "^5.3.3",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "dexie": "^4.4.4",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1",
+    "tailwindcss": "^4.3.2",
+    "typescript": "~6.0.2",
+    "uuid": "^14.0.1",
+    "vite": "^8.1.1",
+    "wrangler": "^4.110.0",
+    "zustand": "^5.0.14"
+  },
+  "dependencies": {
+    "browser-image-compression": "^2.0.2",
+    "itty-router": "^5.0.24",
+    "jose": "^6.2.3",
+    "jszip": "^3.10.1"
+  }
+}
