@@ -71,6 +71,49 @@ export async function handlePhotos(request: Request, env: Env) {
     }), { headers: { 'Content-Type': 'application/json' } });
   }
 
+  // ====== 上传头像 POST /api/avatars/upload?studentId=xxx ======
+  if (url.pathname === '/api/avatars/upload' && method === 'POST') {
+    const studentId = url.searchParams.get('studentId');
+    if (!studentId) {
+      return new Response(JSON.stringify({ error: '缺少 studentId' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+
+    if (!file) {
+      return new Response(JSON.stringify({ error: '缺少文件' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const fileData = await file.arrayBuffer();
+    const mimeType = file.type || 'image/jpeg';
+    const fileName = `avatars/${studentId}/${Date.now()}.jpg`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('photos')
+      .upload(fileName, fileData, { contentType: mimeType });
+
+    if (uploadError) {
+      return new Response(JSON.stringify({ error: uploadError.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const { data: urlData } = supabase.storage.from('photos').getPublicUrl(fileName);
+
+    // 更新学生的 avatar_url
+    const { error: dbError } = await supabase
+      .from('students')
+      .update({ avatar_url: urlData.publicUrl })
+      .eq('id', studentId);
+
+    if (dbError) {
+      return new Response(JSON.stringify({ error: dbError.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    return new Response(JSON.stringify({ url: urlData.publicUrl }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   // ====== 获取照片列表 GET /api/photos?sessionId=xxx ======
   if (url.pathname === '/api/photos' && method === 'GET') {
     const sessionId = url.searchParams.get('sessionId');
