@@ -11,18 +11,30 @@ import {
 import type { StudentNote } from '@/services/aiGenerator';
 import type { Feedback } from '@/types';
 
-const AVATAR_COLORS = ['#4F46E5', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#06B6D4', '#F97316'];
-
-function hashName(name: string): number {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+function StudentAvatar({ student, size = 32 }: { student: any; size?: number }) {
+  const avatarUrl = student?.avatarUrl || student?.avatar_url;
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={student?.name || ''}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
   }
-  return Math.abs(hash);
-}
-
-function getAvatarColor(name: string): string {
-  return AVATAR_COLORS[hashName(name) % AVATAR_COLORS.length];
+  const COLORS = ['#e94560', '#0f3460', '#FFD700', '#16c79a', '#bb86fc', '#ff7043'];
+  const hash = (student?.name || '').split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%',
+      background: COLORS[hash % COLORS.length], color: '#fff',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.4, fontWeight: 700, flexShrink: 0,
+    }}>
+      {(student?.name || '?')[0]}
+    </div>
+  );
 }
 
 const demoFeedbacks: Feedback[] = [];
@@ -359,14 +371,7 @@ export default function DesktopFeedback() {
                   <tr key={student.id}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{
-                          width: 32, height: 32, borderRadius: '50%',
-                          background: AVATAR_COLORS[idx % AVATAR_COLORS.length], color: 'white',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 12, fontWeight: 700,
-                        }}>
-                          {student.name.charAt(0)}
-                        </div>
+                        <StudentAvatar student={student} size={32} />
                         <span style={{ fontWeight: 600, fontSize: 13 }}>{student.name}</span>
                       </div>
                     </td>
@@ -512,6 +517,7 @@ export default function DesktopFeedback() {
                     }}>
                       {isCompleted ? '\u2713' : isStreaming ? '\u25C9' : '\u25CB'}
                     </span>
+                    <StudentAvatar student={student} size={24} />
                     <span style={{ fontWeight: 700, fontSize: 14 }}>{student.name}</span>
                     <span style={{
                       fontSize: 11, padding: '2px 8px', borderRadius: 10,
@@ -626,14 +632,7 @@ export default function DesktopFeedback() {
                       marginBottom: 2, display: 'flex', alignItems: 'center', gap: 10,
                     }}
                   >
-                    <div style={{
-                      width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                      background: AVATAR_COLORS[idx % AVATAR_COLORS.length], color: 'white',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, fontWeight: 700,
-                    }}>
-                      {student?.name.charAt(0) || '?'}
-                    </div>
+                    <StudentAvatar student={student} size={32} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{student?.name || '未知'}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
