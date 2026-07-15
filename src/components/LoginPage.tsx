@@ -206,16 +206,6 @@ export default function LoginPage() {
           }}>
             助教大冒险
           </h1>
-          <p style={{
-            fontSize: 14,
-            color: '#a0a0a0',
-            marginBottom: 32,
-            lineHeight: 1.6,
-          }}>
-            厌倦了Excel和纸笔？<br />
-            来场像素世界的教学革命吧！
-          </p>
-
           {/* 特性列表 - 像素风格 */}
           <div style={{
             display: 'flex',
