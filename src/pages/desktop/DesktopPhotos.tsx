@@ -145,7 +145,10 @@ export default function DesktopPhotos() {
         const studentFolder = folder.folder(photo.studentName || '未知学生')!;
         const ext = photo.mimeType === 'image/png' ? 'png' : 'jpg';
         const fileName = `${photo.type === 'homework' ? '作业批改' : '小测批改'}_${photo.id.slice(0, 6)}.${ext}`;
-        studentFolder.file(fileName, photo.baseData, { base64: true });
+        // 从 URL 下载图片二进制数据
+        const imgRes = await fetch(photo.url);
+        const imgBlob = await imgRes.blob();
+        studentFolder.file(fileName, imgBlob);
       }
 
       const blob = await zip.generateAsync({ type: 'blob' });
