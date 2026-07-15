@@ -423,7 +423,88 @@ export default function DesktopClasses() {
       {/* 班级表格 */}
       <div className="d-panel">
         <div className="d-panel-header">
-          <h3>班级列表</h3>
+          <h3>今日有课</h3>
+        </div>
+        <div className="d-panel-body" style={{ padding: 0 }}>
+          <table className="d-table">
+            <thead>
+              <tr>
+                <th>班级</th>
+                <th>学期</th>
+                <th>上课模式</th>
+                <th>学生人数</th>
+                <th>课程进度</th>
+                <th>状态</th>
+                <th style={{ textAlign: 'right' }}>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.filter(c => c.id === currentClass?.id || c.scheduleMode === 'weekly').map((cls, idx) => {
+                const prog = getProgress(cls);
+                const isActive = prog.pct < 100;
+                return (
+                  <tr key={cls.id} onClick={() => openDetail(cls)} style={{ cursor: 'pointer' }}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 4, height: 32, borderRadius: 2, background: COLORS[idx % COLORS.length] }} />
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 13 }}>{cls.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {cls.scheduleMode === 'continuous' ? '连续上课' : '每周重复'}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td><span className="tag tag-primary">{getSemLabel(cls.semester)}</span></td>
+                    <td style={{ fontSize: 12 }}>{cls.scheduleMode === 'continuous' ? '连续上课' : '每周重复'}</td>
+                    <td style={{ fontSize: 12, fontWeight: 600 }}>{cls.studentCount || 8} 人</td>
+                    <td style={{ minWidth: 160 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div className="progress-bar" style={{ flex: 1 }}>
+                          <div className="progress-fill" style={{ width: `${prog.pct}%` }} />
+                        </div>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 36, textAlign: 'right' }}>{prog.pct}%</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`status-badge ${isActive ? 'status-present' : 'status-absent'}`}>
+                        {isActive ? '进行中' : '已结课'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        className="d-btn d-btn-ghost d-btn-sm"
+                        onClick={(e) => { e.stopPropagation(); openEditModal(cls); }}
+                      >
+                        编辑
+                      </button>
+                      <button
+                        className="d-btn d-btn-ghost d-btn-sm"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(cls); }}
+                        style={{ color: 'var(--danger)' }}
+                      >
+                        删除
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.filter(c => c.id === currentClass?.id || c.scheduleMode === 'weekly').length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
+                    今日没有课程安排
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 全部班级 */}
+      <div className="d-panel" style={{ marginTop: 16 }}>
+        <div className="d-panel-header">
+          <h3>全部班级</h3>
           <span className="d-select" style={{ width: 'auto', padding: '4px 10px', fontSize: 11 }}>共 {filtered.length} 个班级</span>
         </div>
         <div className="d-panel-body" style={{ padding: 0 }}>
