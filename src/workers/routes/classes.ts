@@ -1,19 +1,27 @@
 import type { Env } from '../index';
+import { getSupabaseClient } from '../index';
 import { verifyAuth } from '../middleware/auth';
 
 export async function handleClasses(request: Request, env: Env) {
   const user = await verifyAuth(request, env);
-  if (!user) return Response.json({ error: '请先登录' }, { status: 401 });
+  if (!user) return new Response(JSON.stringify({ error: '请先登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
 
   const url = new URL(request.url);
   const method = request.method;
+  const supabase = getSupabaseClient(env);
 
   // 获取用户所有班级
   if (url.pathname === '/api/classes' && method === 'GET') {
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM classes WHERE user_id = ? ORDER BY created_at DESC'
-    ).bind(user.userId).all();
-    return Response.json(results);
+    const { data, error } = await supabase
+      .from('classes')
+      .select('*')
+      .eq('user_id', user.userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify(data || []), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // 创建班级
@@ -22,15 +30,23 @@ export async function handleClasses(request: Request, env: Env) {
       name: string; semester?: string; scheduleMode?: string;
       scheduleConfig?: string; totalSessions?: number;
     };
-    const id = crypto.randomUUID();
-    await env.DB.prepare(
-      'INSERT INTO classes (id, user_id, name, semester, schedule_mode, schedule_config, total_sessions) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(
-      id, user.userId, data.name,
-      data.semester || 'spring', data.scheduleMode || 'weekly',
-      data.scheduleConfig || '{}', data.totalSessions || 20
-    ).run();
-    return Response.json({ id, success: true });
+    const { data: newClass, error } = await supabase
+      .from('classes')
+      .insert({
+        user_id: user.userId,
+        name: data.name,
+        semester: data.semester || 'spring',
+        schedule_mode: data.scheduleMode || 'weekly',
+        schedule_config: data.scheduleConfig || '{}',
+        total_sessions: data.totalSessions || 20,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ id: newClass?.id, success: true }), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // 更新班级
@@ -38,27 +54,38 @@ export async function handleClasses(request: Request, env: Env) {
   if (match && method === 'PUT') {
     const id = match[1];
     const data = await request.json();
-    const sets: string[] = [];
-    const values: unknown[] = [];
+    const updates: Record<string, unknown> = {};
 
-    if (data.name !== undefined) { sets.push('name = ?'); values.push(data.name); }
-    if (data.semester !== undefined) { sets.push('semester = ?'); values.push(data.semester); }
-    if (data.scheduleMode !== undefined) { sets.push('schedule_mode = ?'); values.push(data.scheduleMode); }
-    if (data.scheduleConfig !== undefined) { sets.push('schedule_config = ?'); values.push(data.scheduleConfig); }
-    if (data.totalSessions !== undefined) { sets.push('total_sessions = ?'); values.push(data.totalSessions); }
+    if (data.name !== undefined) updates.name = data.name;
+    if (data.semester !== undefined) updates.semester = data.semester;
+    if (data.scheduleMode !== undefined) updates.schedule_mode = data.scheduleMode;
+    if (data.scheduleConfig !== undefined) updates.schedule_config = data.scheduleConfig;
+    if (data.totalSessions !== undefined) updates.total_sessions = data.totalSessions;
 
-    if (sets.length > 0) {
-      values.push(id);
-      await env.DB.prepare(`UPDATE classes SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase
+        .from('classes')
+        .update(updates)
+        .eq('id', id);
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+      }
     }
-    return Response.json({ success: true });
+    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // 删除班级
   if (match && method === 'DELETE') {
-    await env.DB.prepare('DELETE FROM classes WHERE id = ? AND user_id = ?').bind(match[1], user.userId).run();
-    return Response.json({ success: true });
+    const { error } = await supabase
+      .from('classes')
+      .delete()
+      .eq('id', match[1])
+      .eq('user_id', user.userId);
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  return Response.json({ error: '未找到路由' }, { status: 404 });
+  return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
 }
