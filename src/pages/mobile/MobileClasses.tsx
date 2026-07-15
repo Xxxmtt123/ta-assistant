@@ -202,9 +202,10 @@ export default function MobileClasses() {
     setFormDays(cls.scheduleConfig?.days || [5]);
     setFormStartTime(cls.scheduleConfig?.startTime || '14:00');
     setFormEndTime(cls.scheduleConfig?.endTime || '16:00');
-    setFormContDates(cls.scheduleConfig?.continuousDates && cls.scheduleConfig.continuousDates.length > 0
-      ? [...cls.scheduleConfig.continuousDates]
-      : ['7月7日 周一', '7月8日 周二', '7月9日 周三', '7月10日 周四', '7月11日 周五']);
+    setFormContDates(
+      (cls.scheduleConfig?.continuousDates || [])
+        .filter((d: string) => /^\d+月\d+日/.test(d))
+    );
     setFormTotalSessions(cls.totalSessions || 20);
     setFormStudentCount(cls.studentCount || 8);
     setShowClassEdit(true);
@@ -589,10 +590,10 @@ export default function MobileClasses() {
                     <h5>连续上课日期</h5>
                     <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>设置暑假连续上课的具体日期</p>
                     <div className="continuous-dates">
-                      {['7月7日 周一', '7月8日 周二', '7月9日 周三', '7月10日 周四', '7月11日 周五', '7月14日 周一', '7月15日 周二', '7月16日 周三'].map((d, i) => (
+                      {formContDates.map((d, i) => (
                         <div key={i} className="cont-date-item">
                           <span>{d}</span>
-                          <button className="cont-del" onClick={() => showToast('已删除日期', 'info')}>✕</button>
+                          <button className="cont-del" onClick={() => { removeContDate(i); showToast('已删除日期', 'success'); }}>✕</button>
                         </div>
                       ))}
                     </div>
