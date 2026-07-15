@@ -1,45 +1,138 @@
 import type { Env } from '../index';
-import { verifyAuth, signToken, hashPassword } from '../middleware/auth';
+import { getSupabaseClient } from '../index';
+import { verifyAuth } from '../middleware/auth';
 
 export async function handleAuth(request: Request, env: Env) {
   const url = new URL(request.url);
   const method = request.method;
 
   if (url.pathname === '/api/auth/register' && method === 'POST') {
-    const { email, password, name } = await request.json() as { email: string; password: string; name: string };
+    const { username, password, name } = await request.json() as { username: string; password: string; name: string };
 
-    // 检查是否已注册
-    const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
-    if (existing) {
-      return Response.json({ error: '该邮箱已注册' }, { status: 400 });
+    if (!username || !password) {
+      return new Response(JSON.stringify({ error: '用户名和密码不能为空' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
-    const id = crypto.randomUUID();
+    const supabase = getSupabaseClient(env);
+
+    // 检查用户名是否已存在
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', username)
+      .single();
+
+    if (existing) {
+      return new Response(JSON.stringify({ error: '用户名已存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // 密码哈希（Workers 环境用 Web Crypto API）
     const passwordHash = await hashPassword(password);
 
-    await env.DB.prepare(
-      'INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)'
-    ).bind(id, email, passwordHash, name).run();
+    // 插入用户
+    const { data: user, error } = await supabase
+      .from('users')
+      .insert({ username, password_hash: passwordHash, name })
+      .select('id, username, name')
+      .single();
 
-    const token = await signToken({ userId: id, email, name }, env.JWT_SECRET);
-    return Response.json({ token, user: { id, email, name } });
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // 生成 JWT
+    const token = await createJWT(user.id, env);
+
+    return new Response(JSON.stringify({ token, user }), { headers: { 'Content-Type': 'application/json' } });
   }
 
   if (url.pathname === '/api/auth/login' && method === 'POST') {
-    const { email, password } = await request.json() as { email: string; password: string };
-    const passwordHash = await hashPassword(password);
+    const { username, password } = await request.json() as { username: string; password: string };
 
-    const user = await env.DB.prepare(
-      'SELECT id, email, name, password_hash FROM users WHERE email = ?'
-    ).bind(email).first() as { id: string; email: string; name: string; password_hash: string } | undefined;
+    const supabase = getSupabaseClient(env);
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, username, name, password_hash')
+      .eq('username', username)
+      .single();
 
-    if (!user || user.password_hash !== passwordHash) {
-      return Response.json({ error: '邮箱或密码错误' }, { status: 401 });
+    if (!user) {
+      return new Response(JSON.stringify({ error: '用户名或密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     }
 
-    const token = await signToken({ userId: user.id, email: user.email, name: user.name }, env.JWT_SECRET);
-    return Response.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+    // 验证密码
+    const valid = await verifyPassword(password, user.password_hash);
+    if (!valid) {
+      return new Response(JSON.stringify({ error: '用户名或密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const token = await createJWT(user.id, env);
+
+    return new Response(JSON.stringify({
+      token,
+      user: { id: user.id, username: user.username, name: user.name },
+    }), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  return Response.json({ error: '未找到路由' }, { status: 404 });
+  // GET /api/auth/me — 用 JWT 获取当前用户信息
+  if (url.pathname === '/api/auth/me' && method === 'GET') {
+    const auth = await verifyAuth(request, env);
+    if (!auth) {
+      return new Response(JSON.stringify({ error: '请先登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+    const supabase = getSupabaseClient(env);
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, username, name')
+      .eq('id', auth.userId)
+      .single();
+    if (!user) {
+      return new Response(JSON.stringify({ error: '用户不存在' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify(user), { headers: { 'Content-Type': 'application/json' } });
+  }
+
+  return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+}
+
+// 密码哈希（SHA-256）
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 验证密码
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  const passwordHash = await hashPassword(password);
+  return passwordHash === hash;
+}
+
+// 简单 JWT（HMAC-SHA256）
+async function createJWT(userId: string, env: Env): Promise<string> {
+  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = btoa(JSON.stringify({
+    sub: userId,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60, // 7天
+  }));
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(env.SUPABASE_KEY),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(`${header}.${payload}`)
+  );
+
+  const sig = btoa(String.fromCharCode(...new Uint8Array(signature)));
+  return `${header}.${payload}.${sig}`;
 }
