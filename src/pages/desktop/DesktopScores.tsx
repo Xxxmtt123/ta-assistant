@@ -1,9 +1,22 @@
 import { useEffect } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
+import { scoreApi } from '@/services/api';
 import { exportToCsv } from '@/utils/csv';
 import type { Score } from '@/types';
 
 const AVATAR_COLORS = ['#4F46E5', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#06B6D4', '#F97316'];
+
+function hashName(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+}
+
+function getAvatarColor(name: string): string {
+  return AVATAR_COLORS[hashName(name) % AVATAR_COLORS.length];
+}
 
 const ATTENDANCE_OPTIONS: Array<{ val: Score['attendance']; label: string }> = [
   { val: 'present', label: '出勤' },
@@ -31,9 +44,22 @@ export default function DesktopScores() {
 
   const sessionId = currentSession?.id || 'session-current';
 
+  // 从 API 加载成绩
+  useEffect(() => {
+    if (!currentSession?.id) return;
+    (async () => {
+      try {
+        const list = await scoreApi.getBySession(currentSession.id);
+        setScores(list);
+      } catch {
+        // 如果没有成绩数据，不报错，让用户手动录入
+      }
+    })();
+  }, [currentSession?.id, setScores]);
+
   // 为缺少成绩记录的学生初始化空记录
   useEffect(() => {
-    if (students.length === 0) return;
+    if (students.length === 0 || !sessionId) return;
     const missing = students.filter(
       (stu) => !scores.some((s) => s.studentId === stu.id && s.sessionId === sessionId)
     );
@@ -41,7 +67,7 @@ export default function DesktopScores() {
       const newRecords = missing.map((stu) => createEmptyScore(stu.id, sessionId));
       setScores([...scores, ...newRecords]);
     }
-  }, [students, sessionId, scores, setScores]);
+  }, [students, sessionId]);
 
   // 当前课次的成绩记录（按学生顺序）
   const sessionScores: Score[] = students.map((stu) => {
@@ -60,8 +86,17 @@ export default function DesktopScores() {
     setScores(updated);
   };
 
-  const handleSave = () => {
-    showToast('成绩数据已保存', 'success');
+  const handleSave = async () => {
+    try {
+      // 过滤出当前课次的有效成绩（有学生关联的）
+      const validScores = sessionScores.filter(s => s.studentId && s.sessionId);
+      if (validScores.length > 0) {
+        await scoreApi.batch(validScores);
+      }
+      showToast('成绩数据已保存', 'success');
+    } catch (err: any) {
+      showToast(err.message || '保存成绩失败', 'error');
+    }
   };
 
   const handleExportScores = () => {
@@ -191,8 +226,9 @@ export default function DesktopScores() {
               </tr>
             </thead>
             <tbody>
-              {sessionScores.map((score, index) => {
+              {sessionScores.map((score) => {
                 const student = students.find((s) => s.id === score.studentId);
+                const color = student ? getAvatarColor(student.name) : AVATAR_COLORS[0];
                 return (
                   <tr key={score.id}>
                     <td>
@@ -200,7 +236,7 @@ export default function DesktopScores() {
                         <div
                           style={{
                             width: '32px', height: '32px', borderRadius: '50%',
-                            background: AVATAR_COLORS[index % AVATAR_COLORS.length],
+                            background: color,
                             color: 'white',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: '12px', fontWeight: 700, flexShrink: 0,
