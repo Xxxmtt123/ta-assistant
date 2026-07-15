@@ -268,9 +268,6 @@ export default function LoginPage() {
             ▶ PRESS START
           </button>
 
-          <p style={{ fontSize: 11, color: '#555', marginTop: 16 }}>
-            已通关教师: 1,337 人
-          </p>
         </div>
       )}
 
