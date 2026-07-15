@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
+import { classApi, studentApi } from '@/services/api';
 import type { Class, ScheduleConfig } from '@/types';
 
 const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#3B82F6', '#EC4899'];
@@ -45,6 +46,22 @@ export default function MobileClasses() {
   const [formTotalSessions, setFormTotalSessions] = useState(20);
   const [formStudentCount, setFormStudentCount] = useState(8);
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    try {
+      const classList = await classApi.list();
+      setClasses(classList);
+      if (classList.length > 0 && !currentClass) {
+        setCurrentClass(classList[0]);
+      }
+    } catch (e: any) {
+      showToast('加载数据失败', 'error');
+    }
+  }
+
   const todayClasses = classes.filter(c => c.id === currentClass?.id || c.scheduleMode === 'weekly').slice(0, 2);
   const allClasses = classes;
 
@@ -53,11 +70,17 @@ export default function MobileClasses() {
     showToast(`已切换到 ${cls.name}`, 'success');
   };
 
-  const openDetail = (cls: Class) => {
+  const openDetail = async (cls: Class) => {
     setDetailClass(cls);
     setShowDetail(true);
     setCdTab(0);
     setSemester(cls.semester || 'summer');
+    try {
+      const stuList = await classApi.getStudents(cls.id);
+      setStudents(stuList);
+    } catch (e: any) {
+      showToast('加载学生列表失败', 'error');
+    }
   };
 
   const closeDetail = () => {
@@ -135,7 +158,7 @@ export default function MobileClasses() {
   };
 
   // 保存班级（新增或编辑）
-  const saveClass = () => {
+  const saveClass = async () => {
     if (!formName.trim()) {
       showToast('请输入班级名称', 'error');
       return;
@@ -151,67 +174,63 @@ export default function MobileClasses() {
       scheduleConfig.continuousDates = formContDates;
     }
 
-    if (classEditMode === 'add') {
-      const newClass: Class = {
-        id: genId(),
-        userId: 'user_1',
-        name: formName.trim(),
-        semester: formSemester,
-        scheduleMode: formMode,
-        scheduleConfig,
-        totalSessions: formTotalSessions,
-        studentCount: formStudentCount,
-        createdAt: new Date().toISOString(),
-      };
-      const updated = [...classes, newClass];
-      setClasses(updated);
-      setCurrentClass(newClass);
-      showToast(`班级 ${newClass.name} 创建成功`, 'success');
-    } else if (editClassId) {
-      const updated = classes.map(c => {
-        if (c.id === editClassId) {
-          return {
-            ...c,
-            name: formName.trim(),
-            semester: formSemester,
-            scheduleMode: formMode,
-            scheduleConfig,
-            totalSessions: formTotalSessions,
-            studentCount: formStudentCount,
-          };
-        }
-        return c;
-      });
-      setClasses(updated);
-      // 更新 detailClass 和 currentClass
-      const updatedCls = updated.find(c => c.id === editClassId) || null;
-      if (updatedCls) {
-        setDetailClass(updatedCls);
+    try {
+      if (classEditMode === 'add') {
+        const newClass = await classApi.create({
+          name: formName.trim(),
+          semester: formSemester,
+          scheduleMode: formMode,
+          scheduleConfig,
+          totalSessions: formTotalSessions,
+          studentCount: formStudentCount,
+        });
+        const updated = [...classes, newClass];
+        setClasses(updated);
+        setCurrentClass(newClass);
+        showToast(`班级 ${newClass.name} 创建成功`, 'success');
+      } else if (editClassId) {
+        const updatedClass = await classApi.update(editClassId, {
+          name: formName.trim(),
+          semester: formSemester,
+          scheduleMode: formMode,
+          scheduleConfig,
+          totalSessions: formTotalSessions,
+          studentCount: formStudentCount,
+        });
+        const updated = classes.map(c => c.id === editClassId ? updatedClass : c);
+        setClasses(updated);
+        setDetailClass(updatedClass);
         if (currentClass?.id === editClassId) {
-          setCurrentClass(updatedCls);
+          setCurrentClass(updatedClass);
         }
+        showToast('班级信息已更新', 'success');
       }
-      showToast('班级信息已更新', 'success');
+      setShowClassEdit(false);
+    } catch (e: any) {
+      showToast(e.message || '操作失败', 'error');
     }
-
-    setShowClassEdit(false);
   };
 
   // 删除班级
-  const deleteClass = (cls: Class) => {
+  const deleteClass = async (cls: Class) => {
     if (!confirmDelete) {
       setConfirmDelete(true);
       showToast('再次点击确认删除班级', 'info');
       return;
     }
-    const updated = classes.filter(c => c.id !== cls.id);
-    setClasses(updated);
-    if (currentClass?.id === cls.id) {
-      setCurrentClass(null);
+    try {
+      await classApi.delete(cls.id);
+      const updated = classes.filter(c => c.id !== cls.id);
+      setClasses(updated);
+      if (currentClass?.id === cls.id) {
+        setCurrentClass(updated.length > 0 ? updated[0] : null);
+      }
+      setConfirmDelete(false);
+      closeDetail();
+      showToast(`班级 ${cls.name} 已删除`, 'success');
+    } catch (e: any) {
+      showToast(e.message || '删除失败', 'error');
     }
-    setConfirmDelete(false);
-    closeDetail();
-    showToast(`班级 ${cls.name} 已删除`, 'success');
   };
 
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -549,10 +568,15 @@ export default function MobileClasses() {
                   <span className={`session-tag ${stu.statusClass}`}>{stu.status}</span>
                   <div className="stu-actions">
                     <button className="stu-action-btn" onClick={() => setEditStudent(i)}>✎</button>
-                    <button className="stu-action-btn danger" onClick={() => {
-                      const updated = storeStudents.filter(s => s.id !== stu.id);
-                      setStudents(updated);
-                      showToast(`已删除 ${stu.name}`, 'success');
+                    <button className="stu-action-btn danger" onClick={async () => {
+                      try {
+                        await studentApi.delete(stu.id);
+                        const updated = storeStudents.filter(s => s.id !== stu.id);
+                        setStudents(updated);
+                        showToast(`已删除 ${stu.name}`, 'success');
+                      } catch (e: any) {
+                        showToast(e.message || '删除学生失败', 'error');
+                      }
                     }}>✕</button>
                   </div>
                 </div>
@@ -620,7 +644,7 @@ export default function MobileClasses() {
             </div>
             <div className="stu-edit-actions">
               <button className="m-btn m-btn-outline" onClick={() => setEditStudent(null)}>取消</button>
-              <button className="m-btn m-btn-primary" onClick={() => {
+              <button className="m-btn m-btn-primary" onClick={async () => {
                 const nameEl = document.getElementById('stu-name-input') as HTMLInputElement;
                 const name = nameEl?.value.trim();
                 if (!name) {
@@ -633,33 +657,45 @@ export default function MobileClasses() {
                 const noteEl = document.getElementById('stu-note-input') as HTMLInputElement;
 
                 if (editStudent === -1) {
-                  // 添加学生
-                  const newStudent: any = {
-                    id: 'stu_' + Date.now(),
-                    classId: detailClass?.id || currentClass?.id || '',
-                    name,
-                    studentId: idEl?.value.trim() || '',
-                    phone: phoneEl?.value.trim() || '',
-                    parentName: parentEl?.value.trim() || '',
-                    note: noteEl?.value.trim() || '',
-                    createdAt: new Date().toISOString(),
-                  };
-                  setStudents([...storeStudents, newStudent]);
-                  showToast(`已添加学生 ${name}`, 'success');
+                  const classId = detailClass?.id || currentClass?.id || '';
+                  if (!classId) {
+                    showToast('未选择班级', 'error');
+                    return;
+                  }
+                  try {
+                    const newStudent = await studentApi.create({
+                      classId,
+                      name,
+                      studentId: idEl?.value.trim() || '',
+                      phone: phoneEl?.value.trim() || '',
+                      parentName: parentEl?.value.trim() || '',
+                      note: noteEl?.value.trim() || '',
+                    });
+                    setStudents([...storeStudents, newStudent]);
+                    showToast(`已添加学生 ${name}`, 'success');
+                    setEditStudent(null);
+                  } catch (e: any) {
+                    showToast(e.message || '添加学生失败', 'error');
+                  }
                 } else {
-                  // 编辑学生
                   const stu = storeStudents[editStudent];
-                  if (stu) {
-                    const updated = storeStudents.map((s, i) =>
-                      i === editStudent
-                        ? { ...s, name, studentId: idEl?.value.trim() || '', phone: phoneEl?.value.trim() || '', parentName: parentEl?.value.trim() || '', note: noteEl?.value.trim() || '' }
-                        : s
-                    );
+                  if (!stu) return;
+                  try {
+                    const updatedStudent = await studentApi.update(stu.id, {
+                      name,
+                      studentId: idEl?.value.trim() || '',
+                      phone: phoneEl?.value.trim() || '',
+                      parentName: parentEl?.value.trim() || '',
+                      note: noteEl?.value.trim() || '',
+                    });
+                    const updated = storeStudents.map((s, i) => i === editStudent ? updatedStudent : s);
                     setStudents(updated);
                     showToast(`已更新学生 ${name}`, 'success');
+                    setEditStudent(null);
+                  } catch (e: any) {
+                    showToast(e.message || '更新学生失败', 'error');
                   }
                 }
-                setEditStudent(null);
               }}>保存</button>
             </div>
           </div>
