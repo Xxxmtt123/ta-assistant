@@ -135,34 +135,8 @@ export default function LoginPage() {
               background: 'rgba(76, 175, 80, 0.1)',
             }} />
 
-            {/* 速度线 */}
-            <div style={{ position: 'relative' }}>
-              <svg width="180" height="180" viewBox="0 0 180 180" fill="none">
-                {/* 书本 */}
-                <rect x="55" y="90" width="70" height="50" rx="4" fill="#4CAF50" opacity="0.9" />
-                <rect x="58" y="93" width="64" height="44" rx="2" fill="#fff" opacity="0.8" />
-                <line x1="70" y1="103" x2="110" y2="103" stroke="#81C784" strokeWidth="2" />
-                <line x1="70" y1="111" x2="100" y2="111" stroke="#A5D6A7" strokeWidth="2" />
-                <line x1="70" y1="119" x2="95" y2="119" stroke="#C8E6C9" strokeWidth="2" />
-                {/* 人物 */}
-                <circle cx="90" cy="52" r="16" fill="#FFB74D" />
-                <path d="M70 85 Q90 70 110 85 L110 95 Q110 100 105 100 L75 100 Q70 100 70 95 Z" fill="#4CAF50" />
-                {/* 左手举起 */}
-                <line x1="72" y1="82" x2="58" y2="68" stroke="#FFB74D" strokeWidth="4" strokeLinecap="round" />
-                {/* 右手 -->
-                <line x1="108" y1="82" x2="122" y2="75" stroke="#FFB74D" strokeWidth="4" strokeLinecap="round" />
-                {/* 速度线 */}
-                <line x1="35" y1="65" x2="50" y2="65" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
-                <line x1="40" y1="75" x2="52" y2="75" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" opacity="0.3" />
-                <line x1="38" y1="85" x2="48" y2="85" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" opacity="0.5" />
-                <line x1="130" y1="70" x2="145" y2="70" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" opacity="0.3" />
-                <line x1="128" y1="80" x2="140" y2="80" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
-                {/* 星星 */}
-                <text x="50" y="48" fontSize="16" fill="#FFD54F">✦</text>
-                <text x="120" y="45" fontSize="12" fill="#FFD54F">✦</text>
-                <text x="135" y="90" fontSize="10" fill="#A5D6A7">✦</text>
-              </svg>
-            </div>
+            {/* 跑步人物插画 */}
+            <img src="/illust-running.jpg" alt="" style={{ height: '85%', objectFit: 'contain' }} />
           </div>
 
           {/* 标题 */}
@@ -267,20 +241,7 @@ export default function LoginPage() {
             }} />
 
             {/* 击掌插画 */}
-            <svg width="160" height="120" viewBox="0 0 160 120" fill="none">
-              {/* 左手 */}
-              <path d="M55 70 L45 50 Q42 44 48 44 L55 44 Q60 44 60 50 L60 62" fill="#64B5F6" stroke="#42A5F5" strokeWidth="1" />
-              <path d="M45 50 L40 45 Q38 40 44 40 L50 42" fill="#64B5F6" />
-              {/* 右手 */}
-              <path d="M105 70 L115 50 Q118 44 112 44 L105 44 Q100 44 100 50 L100 62" fill="#FFB74D" stroke="#FFA726" strokeWidth="1" />
-              <path d="M115 50 L120 45 Q122 40 116 40 L110 42" fill="#FFB74D" />
-              {/* 击掌星星 */}
-              <text x="68" y="35" fontSize="20" fill="#FFD54F">✦</text>
-              <text x="82" y="30" fontSize="14" fill="#FFD54F">✦</text>
-              <text x="75" y="22" fontSize="10" fill="#FFE082">✦</text>
-              <text x="60" y="80" fontSize="8" fill="#90CAF9">✦</text>
-              <text x="95" y="80" fontSize="8" fill="#FFCC80">✦</text>
-            </svg>
+            <img src="/illust-highfive.jpg" alt="" style={{ height: '80%', objectFit: 'contain' }} />
           </div>
 
           {/* 标题 */}
