@@ -5,6 +5,32 @@ import { scoreApi } from '@/services/api';
 import StudentSelector from '@/components/StudentSelector';
 import type { Score } from '@/types';
 
+function StudentAvatar({ student, size = 32 }: { student: any; size?: number }) {
+  const avatarUrl = student?.avatarUrl || student?.avatar_url;
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={student?.name || ''}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
+  }
+  const COLORS = ['#e94560', '#0f3460', '#FFD700', '#16c79a', '#bb86fc', '#ff7043'];
+  const hash = (student?.name || '').split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%',
+      background: COLORS[hash % COLORS.length], color: '#fff',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.4, fontWeight: 700, flexShrink: 0,
+    }}>
+      {(student?.name || '?')[0]}
+    </div>
+  );
+}
+
 type Attendance = Score['attendance'];
 
 const ATT_OPTIONS: Array<{ val: Attendance; label: string; activeBg: string; activeColor: string }> = [
@@ -209,7 +235,8 @@ export default function MobileScores() {
 
       {/* 成绩输入卡片 */}
       <div className="m-card">
-        <div className="m-card-title">
+        <div className="m-card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <StudentAvatar student={currentStudent} size={32} />
           <span>{currentStudent?.name || ''} - 成绩录入</span>
           <span className="m-tag m-tag-primary">
             {currentStudent ? `${currentStudentIndex + 1}/${students.length}` : '-'}
