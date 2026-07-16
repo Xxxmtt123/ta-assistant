@@ -50,6 +50,20 @@ export default function DesktopFeedback() {
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [streamingContent, setStreamingContent] = useState<Record<string, string>>({});
 
+  const handleDeleteFeedback = (feedbackId: string) => {
+    if (!window.confirm('确定要删除这条反馈吗？')) return;
+    const newList = feedbackList.filter(f => f.id !== feedbackId);
+    setFeedbackList(newList);
+    if (currentClass) {
+      if (newList.length > 0) {
+        localStorage.setItem(`feedback_list_${currentClass.id}`, JSON.stringify(newList));
+      } else {
+        localStorage.removeItem(`feedback_list_${currentClass.id}`);
+      }
+    }
+    showToast('已删除', 'success');
+  };
+
   // Step 1
   const [courseContent, setCourseContent] = useState('');
   const [additionalPrompt, setAdditionalPrompt] = useState('');
@@ -680,6 +694,15 @@ export default function DesktopFeedback() {
                       width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
                       background: isComplete ? 'var(--success)' : 'var(--warning)',
                     }} />
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteFeedback(fb.id); }}
+                      style={{
+                        fontSize: 11, color: 'var(--error)', background: 'none', border: 'none',
+                        cursor: 'pointer', padding: '2px 4px', marginLeft: 4,
+                      }}
+                    >
+                      ×
+                    </button>
                   </div>
                 );
               })}
@@ -705,6 +728,11 @@ export default function DesktopFeedback() {
                     <button className="d-btn d-btn-ghost d-btn-sm" onClick={() => {
                       navigator.clipboard.writeText(editContent).then(() => showToast('已复制', 'success'));
                     }}>复制</button>
+                    <button className="d-btn d-btn-ghost d-btn-sm" onClick={() => {
+                      if (editingId) handleDeleteFeedback(editingId);
+                    }} style={{ color: 'var(--error)' }}>
+                      删除
+                    </button>
                   </div>
                 </div>
                 <div className="d-panel-body">
