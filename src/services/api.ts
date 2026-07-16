@@ -1,9 +1,7 @@
 import type { User, Class, Student, Session, Score, Feedback, Photo } from '@/types';
 
-// 本地开发走 Vite proxy（/api → http://127.0.0.1:8787）
-// 生产环境走 Vercel rewrite 代理（相对路径），避免手机端直连 workers.dev 被干扰
-const API_BASE = import.meta.env.VITE_API_BASE ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'https://ta-assistant-api.2144961248.workers.dev' : '');
+// 本地开发直连 Workers API，生产环境走 Vercel rewrite 代理（相对路径）
+const API_BASE = import.meta.env.PROD ? '' : 'https://ta-assistant-api.2144961248.workers.dev';
 
 function getToken(): string | null {
   return localStorage.getItem('ta_token');
