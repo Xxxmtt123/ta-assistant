@@ -17,7 +17,7 @@ const DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '
 
 const STUDENT_COLORS = ['#4F46E5', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#06B6D4', '#F97316'];
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://ta-assistant-api.2144961248.workers.dev';
+const API_BASE = import.meta.env.PROD ? '' : 'https://ta-assistant-api.2144961248.workers.dev';
 
 function hashName(name: string): number {
   let hash = 0;
