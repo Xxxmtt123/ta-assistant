@@ -56,6 +56,18 @@ export default function MobileCamera() {
   const todayPhotos = photos.filter((p) => p.createdAt.slice(0, 10) === todayStr);
   const todayCount = todayPhotos.length;
 
+  const handleRefreshPhotos = async () => {
+    const sessionId = currentSession?.id;
+    if (!sessionId) return;
+    try {
+      const apiPhotos = await photoApi.getBySession(sessionId);
+      setPhotos(apiPhotos || []);
+      showToast('照片已刷新', 'success');
+    } catch {
+      showToast('刷新失败', 'error');
+    }
+  };
+
   const handlePrev = () => {
     if (currentStudentIndex > 0) setCurrentStudentIndex(currentStudentIndex - 1);
   };
@@ -224,13 +236,21 @@ export default function MobileCamera() {
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           今日已拍：<strong style={{ color: 'var(--primary)' }}>{todayCount}</strong> 张
         </span>
-        <button
-          className="m-btn m-btn-sm m-btn-outline"
-          onClick={() => setShowPhotos(true)}
-          disabled={todayCount === 0}
-        >
-          查看照片
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="m-btn m-btn-sm m-btn-outline"
+            onClick={handleRefreshPhotos}
+          >
+            🔄 刷新
+          </button>
+          <button
+            className="m-btn m-btn-sm m-btn-outline"
+            onClick={() => setShowPhotos(true)}
+            disabled={todayCount === 0}
+          >
+            查看照片
+          </button>
+        </div>
       </div>
 
       {/* 照片缩略图列表弹层 */}
@@ -283,6 +303,26 @@ export default function MobileCamera() {
                     position: 'relative',
                   }}
                 >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!window.confirm('确定删除这张照片？')) return;
+                      photoApi.delete(photo.id).then(() => {
+                        setPhotos(useAppStore.getState().photos.filter(p => p.id !== photo.id));
+                        showToast('已删除', 'success');
+                      }).catch(() => showToast('删除失败', 'error'));
+                    }}
+                    style={{
+                      position: 'absolute', top: 4, right: 4,
+                      width: 24, height: 24, borderRadius: '50%',
+                      background: 'rgba(0,0,0,0.6)', border: 'none',
+                      color: 'white', fontSize: 14, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      zIndex: 1,
+                    }}
+                  >
+                    ×
+                  </button>
                   {photo.thumbnailUrl ? (
                     <img
                       src={photo.thumbnailUrl}
