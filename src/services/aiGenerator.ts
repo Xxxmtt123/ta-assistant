@@ -50,12 +50,12 @@ const LEVEL_TEMPLATES = {
   excellent: {
     framework: '肯定亮点 → 基于实际观察的具体表现 → 鼓励',
     tone: '用"非常熟悉""掌握得很扎实""基本上都能写对""优秀！"等词汇肯定',
-    detail: '只写你实际观察到的表现，如"课堂上主动举手回答问题""听写时速度很快且正确率高"，绝对不要编造具体的课堂对话或例句',
+    detail: '只写你实际观察到的正面表现。纯正面反馈，绝对不要加"但""需要加强"等转折。',
   },
   good: {
-    framework: '整体肯定 → 基于实际观察的表现描述 → 温和指出注意点 → 鼓励',
-    tone: '用"还不错""能够理解""可以回忆起来"等词汇，对不足用"需要加强""再熟悉一下"等温和表达',
-    detail: '只基于提供的课堂表现描述来写，不要编造任何课堂细节',
+    framework: '整体肯定 → 基于实际观察的表现描述 → 鼓励',
+    tone: '用"还不错""能够理解""可以回忆起来"等词汇肯定',
+    detail: '如果老师没有提供具体问题，就只写正面内容，不要硬加"但...""需要..."。如果确有不足描写，用温和表达提及。',
   },
   improve: {
     framework: '温和指出观察到的困难 → 基于实际表现分析 → 鼓励',
@@ -82,6 +82,8 @@ function buildSystemPrompt(): string {
 1. **绝对禁止编造**：你只拥有我提供的课堂表现描述，严禁编造任何课堂对话、例句、互动细节、知识点掌握情况。如果信息不足，就写得更概括一些，但绝不虚构。
 2. **禁止课后建议**：不要给出任何课后复习方法、亲子互动建议、具体操作建议。反馈只描述课堂表现，不给家长布置任务。
 3. **每个孩子必须独特**：同一个班级的多个学生，反馈必须有明显差异。不能换个人名就通用。要根据每个孩子的实际表现等级和描述，写出独特的反馈。
+4. **禁止编造不足**：如果老师没有提到具体问题，就只写正面肯定，绝对不要编造类似"拼写时偶尔会有点小疏忽""偶尔会走神""有几个单词没记住""需要再熟悉一下""再巩固一下"等负面或假装温和的批评来凑字数。没有看到的问题就是不存在。反馈可以短，但不能虚构。反馈最重要的是实事求是。
+5. **表现良好/优秀 = 没有不足**：如果老师评价是"表现良好"或"表现优秀"且没有提供具体问题描述，就只写正面内容，不要为了"平衡"或"显得全面"而硬加一句"但...""需要..."。这是一个纯正面反馈。
 
 ## 你的反馈撰写风格（必须严格遵守）：
 
@@ -284,9 +286,9 @@ function generateFallback(note: StudentNote, courseContent: string, additionalPr
       (n, p, e) => `${n}今天给老师留下了很棒的印象呢~${p ? p + '~' : '学习态度非常端正，课堂上的表现可圈可点。'}各方面都表现得很出色，是个让人省心的好孩子。继续加油，老师相信你一定能取得更大的进步！${e}`,
     ],
     good: [
-      (n, p, e) => `${n}今天整体表现挺不错的~${p ? p + '。' : '课堂上能够跟上节奏，学习态度也比较认真。'}大部分内容掌握得还不错，继续保持这种积极的学习态度，相信会越来越好哒！${e}`,
-      (n, p, e) => `今天${n}的表现还不错哟~${p ? p + '。' : '课堂上的参与度和专注度都比较稳定。'}整体学习状态让人比较放心，有一些地方可以再加强一下。很有潜力，继续努力一定会有收获的！${e}`,
-      (n, p, e) => `${n}今天的学习状态还可以~${p ? p + '。' : '课堂上能够认真听讲，练习环节也比较配合。'}整体表现平稳，有一些亮点也有可以改进的地方。保持积极心态，慢慢积累一定会看到进步的！${e}`,
+      (n, p, e) => `${n}今天整体表现挺不错的~${p ? p + '。' : '课堂上能够跟上节奏，学习态度也比较认真。'}继续保持这种积极的学习态度，相信会越来越好哒！${e}`,
+      (n, p, e) => `今天${n}的表现还不错哟~${p ? p + '。' : '课堂上的参与度和专注度都比较稳定。'}整体学习状态让人比较放心。很有潜力，继续努力一定会有收获的！${e}`,
+      (n, p, e) => `${n}今天的学习状态还可以~${p ? p + '。' : '课堂上能够认真听讲，练习环节也比较配合。'}整体表现平稳，学习态度值得肯定。保持积极心态，慢慢积累一定会看到进步的！${e}`,
     ],
     improve: [
       (n, p, e) => `${n}今天的学习态度还是认真的，不过有几个地方我们再注意一下哟~${p ? p + '~' : '课堂上偶尔会有些分心，需要更多专注力。'}老师相信只要保持认真，一定能慢慢改善的。加油，老师一直会支持你的！${e}`,
@@ -306,9 +308,8 @@ function generateFallback(note: StudentNote, courseContent: string, additionalPr
 
   const level = note.performanceLevel || 'good';
   const levelTemplates = templates[level] || templates.good;
-  // 用学生名字做哈希，确保同一个学生总是得到同一套模板，不同学生得到不同模板
-  const hash = n.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  const template = levelTemplates[hash % levelTemplates.length];
+  // 随机选模板，确保每次生成的反馈都不一样，避免家长看出规律
+  const template = levelTemplates[Math.floor(Math.random() * levelTemplates.length)];
   let text = template(n, perf, extra);
 
   if (text.length < 120) {
@@ -320,7 +321,7 @@ function generateFallback(note: StudentNote, courseContent: string, additionalPr
       progress: ['进步趋势很好，继续保持！', '努力终有回报，加油~'],
     };
     const tails = shortTails[level] || shortTails.good;
-    text += tails[hash % tails.length];
+    text += tails[Math.floor(Math.random() * tails.length)];
   }
 
   return { studentId: note.studentId, studentName: note.studentName, content: text, charCount: text.length };
