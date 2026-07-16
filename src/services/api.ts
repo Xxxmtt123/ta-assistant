@@ -126,6 +126,15 @@ export const photoApi = {
   getBySession: (sessionId: string) => request<Photo[]>(`/api/photos?sessionId=${sessionId}`),
   // 获取照片数据用于打包下载（现在返回 URL 而非 base64）
   getDataForDownload: (sessionId: string) => request<Array<{ id: string; studentName: string; studentId: string; type: string; url: string; mimeType: string }>>(`/api/photos/data?sessionId=${sessionId}`),
+
+  // 删除照片
+  delete: (photoId: string) => request<{ success: boolean }>(`/api/photos/${photoId}`, { method: 'DELETE' }),
+
+  // 获取最近上传的照片（用于实时同步）
+  getRecent: (classId?: string) => {
+    const query = classId ? `?classId=${classId}` : '';
+    return request<Photo[]>(`/api/photos/recent${query}`);
+  },
 };
 
 // ====== AI（DeepSeek，前端直连，用户自行配置 key）======
