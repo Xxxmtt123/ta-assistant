@@ -1,44 +1,68 @@
 import type { Env } from '../index';
 
-// 豆包（火山方舟）AI 代理路由
-// 前端请求 → Workers 代理 → 豆包 API
+// DeepSeek AI 代理路由
+// 前端请求 → Workers 代理 → DeepSeek API
 // API Key 存储在 Workers 环境变量中，不暴露到前端
 
-const DOUBAO_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
+const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
 }
 
-interface ChatRequest {
-  model: string;
-  messages: ChatMessage[];
-  temperature?: number;
-  max_tokens?: number;
-  stream?: boolean;
-}
-
-interface AiProxyRequest {
+interface ChatRequestBody {
   messages: ChatMessage[];
   model?: string;
   temperature?: number;
   max_tokens?: number;
 }
 
+interface DeepSeekChatRequest {
+  model: string;
+  messages: ChatMessage[];
+  temperature: number;
+  max_tokens: number;
+  stream?: boolean;
+}
+
+interface DeepSeekChatResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+  usage?: object;
+  model?: string;
+}
+
+function jsonError(error: string, status: number): Response {
+  return new Response(JSON.stringify({ error }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 export async function handleAiProxy(request: Request, env: Env): Promise<Response> {
-  // 从环境变量获取豆包 API Key
-  const apiKey = env.DOUBAO_API_KEY;
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+
+  if (request.method !== 'POST') {
+    return jsonError('Method Not Allowed', 405);
+  }
+
+  // 从环境变量获取 DeepSeek API Key
+  const apiKey = env.DEEPSEEK_API_KEY;
   if (!apiKey) {
-    return new Response(JSON.stringify({ success: false, error: 'AI 服务未配置，请在 Workers 环境变量中设置 DOUBAO_API_KEY' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    return jsonError('AI 服务未配置，请在 Workers 环境变量中设置 DEEPSEEK_API_KEY', 503);
   }
 
   // 解析前端请求
-  let body: AiProxyRequest;
+  let body: ChatRequestBody;
   try {
     body = await request.json();
   } catch {
-    return new Response(JSON.stringify({ success: false, error: '请求体格式错误' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    return jsonError('请求体格式错误', 400);
   }
 
   const {
@@ -48,15 +72,14 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
     max_tokens = 2048,
   } = body;
 
-  // 优先使用环境变量配置的模型（通常是 Endpoint ID），其次用前端传来的，最后兜底
-  const model = env.DOUBAO_MODEL_ID || bodyModel || 'doubao-1-5-pro-32k';
-
   if (!messages || messages.length === 0) {
-    return new Response(JSON.stringify({ success: false, error: 'messages 不能为空' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    return jsonError('messages 不能为空', 400);
   }
 
-  // 构造豆包 API 请求
-  const chatBody: ChatRequest = {
+  // 优先使用环境变量配置的模型，其次用前端传来的，最后兜底
+  const model = env.DEEPSEEK_MODEL_ID || bodyModel || 'deepseek-chat';
+
+  const chatBody: DeepSeekChatRequest = {
     model,
     messages,
     temperature,
@@ -64,41 +87,77 @@ export async function handleAiProxy(request: Request, env: Env): Promise<Respons
   };
 
   try {
-    const response = await fetch(`${DOUBAO_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(chatBody),
-    });
+    if (pathname === '/api/ai/chat' || pathname === '/api/ai/chat/') {
+      // ====== 非流式 ======
+      const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(chatBody),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMsg = `豆包 API 错误 (${response.status})`;
-      try {
-        const errJson = JSON.parse(errorText);
-        errorMsg = errJson.error?.message || errJson.message || errorMsg;
-      } catch { /* use default */ }
-      return new Response(JSON.stringify({ success: false, error: errorMsg }), { status: response.status, headers: { 'Content-Type': 'application/json' } });
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMsg = `DeepSeek API 错误 (${response.status})`;
+        try {
+          const errJson = JSON.parse(errorText);
+          errorMsg = errJson.error?.message || errJson.message || errorMsg;
+        } catch { /* use default */ }
+        return jsonError(errorMsg, response.status);
+      }
+
+      const data = (await response.json()) as DeepSeekChatResponse;
+
+      const content = data.choices?.[0]?.message?.content || '';
+      const usage = data.usage || null;
+
+      return new Response(
+        JSON.stringify({
+          content,
+          usage,
+          model: data.model || model,
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
-    const data = await response.json();
+    if (pathname === '/api/ai/chat/stream' || pathname === '/api/ai/chat/stream/') {
+      // ====== 流式 SSE ======
+      const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ ...chatBody, stream: true }),
+      });
 
-    // 提取 AI 回复内容
-    const content = data.choices?.[0]?.message?.content || '';
-    const usage = data.usage || null;
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMsg = `DeepSeek API 错误 (${response.status})`;
+        try {
+          const errJson = JSON.parse(errorText);
+          errorMsg = errJson.error?.message || errJson.message || errorMsg;
+        } catch { /* use default */ }
+        return jsonError(errorMsg, response.status);
+      }
 
-    return new Response(JSON.stringify({
-      success: true,
-      data: {
-        content,
-        usage,
-        model: data.model || model,
-      },
-    }), { headers: { 'Content-Type': 'application/json' } });
+      // 直接透传 DeepSeek 的 SSE 流
+      return new Response(response.body, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    }
+
+    return jsonError('Not Found', 404);
   } catch (err) {
-    const message = err instanceof Error ? err.message : '请求豆包 API 失败';
-    return new Response(JSON.stringify({ success: false, error: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    const message = err instanceof Error ? err.message : '请求 DeepSeek API 失败';
+    return jsonError(message, 500);
   }
 }
