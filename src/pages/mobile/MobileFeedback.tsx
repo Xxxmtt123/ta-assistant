@@ -41,8 +41,10 @@ function StudentAvatar({ student, size = 32 }: { student: any; size?: number }) 
 type ViewMode = 'setup' | 'notes' | 'result';
 
 export default function MobileFeedback() {
-  const { students } = useStudents();
-  const { currentStudentIndex, setCurrentStudentIndex, showToast, feedbackList, setFeedbackList, currentSession, currentClass } = useAppStore();
+  const { students: hookStudents } = useStudents();
+  const { currentStudentIndex, setCurrentStudentIndex, showToast, feedbackList, setFeedbackList, currentSession, currentClass, students: storeStudents } = useAppStore();
+  // 使用 hook 返回的学生列表（按班级正确过滤），fallback 到 store
+  const students = hookStudents.length > 0 ? hookStudents : storeStudents;
   const [viewMode, setViewMode] = useState<'setup' | 'notes' | 'result'>('setup');
   const [editContent, setEditContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -342,17 +344,30 @@ export default function MobileFeedback() {
   const handleRegenerate = async () => {
     const currentStudent = students[currentStudentIndex];
     if (!currentStudent) return;
+    await doRegenerateForStudent(currentStudent.id);
+  };
+
+  // 为指定学生重写反馈
+  const handleRegenerateSingle = async (studentId: string) => {
+    const idx = students.findIndex(s => s.id === studentId);
+    if (idx >= 0) setCurrentStudentIndex(idx);
+    await doRegenerateForStudent(studentId);
+  };
+
+  const doRegenerateForStudent = async (studentId: string) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
     setIsGenerating(true);
     try {
-      const note = studentNotes.find(n => n.studentId === currentStudent.id) || {
-        studentId: currentStudent.id, studentName: currentStudent.name,
+      const note = studentNotes.find(n => n.studentId === student.id) || {
+        studentId: student.id, studentName: student.name,
         performanceNote: '', performanceLevel: 'good',
       };
       const result = await generateSingleFeedback(courseContent, note, additionalPrompt);
       setEditContent(result.content);
       // 更新 feedbackList
       setFeedbackList(feedbackList.map(f =>
-        f.studentId === currentStudent.id
+        f.studentId === student.id
           ? { ...f, content: result.content, charCount: result.charCount }
           : f
       ));
@@ -552,15 +567,26 @@ export default function MobileFeedback() {
                   </div>
                   {statusTag}
                   {isCompleted && fb && (
-                    <button
-                      onClick={() => handleDeleteFeedback(fb.id)}
-                      style={{
-                        fontSize: 11, color: 'var(--error)', background: 'none', border: 'none',
-                        cursor: 'pointer', padding: '2px 6px', borderRadius: 4,
-                      }}
-                    >
-                      删除
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleRegenerateSingle(student.id)}
+                        style={{
+                          fontSize: 11, color: 'var(--primary)', background: 'none', border: 'none',
+                          cursor: 'pointer', padding: '2px 6px', borderRadius: 4,
+                        }}
+                      >
+                        重写
+                      </button>
+                      <button
+                        onClick={() => handleDeleteFeedback(fb.id)}
+                        style={{
+                          fontSize: 11, color: 'var(--error)', background: 'none', border: 'none',
+                          cursor: 'pointer', padding: '2px 6px', borderRadius: 4,
+                        }}
+                      >
+                        删除
+                      </button>
+                    </>
                   )}
                 </div>
 
