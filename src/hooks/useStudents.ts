@@ -1,35 +1,33 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
 import { studentApi } from '@/services/api';
-import type { Student } from '@/types';
 
 export function useStudents(classId?: string) {
-  const students = useAppStore((s) => s.students);
-  const setStudents = useAppStore((s) => s.setStudents);
-  const currentClass = useAppStore((s) => s.currentClass);
-  const showToast = useAppStore((s) => s.showToast);
+  const currentClass = useAppStore(s => s.currentClass);
+  const [localStudents, setLocalStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const effectiveClassId = classId || currentClass?.id;
+  const [effectiveClassId] = classId !== undefined ? [classId] : [currentClass?.id];
 
   useEffect(() => {
-    if (!effectiveClassId) return;
-
-    let cancelled = false;
-
-    async function loadStudents() {
-      try {
-        const data: Student[] = await studentApi.getByClass(effectiveClassId!);
-        if (!cancelled) {
-          setStudents(data || []);
-        }
-      } catch {
-        if (!cancelled) showToast('加载学生列表失败', 'error');
-      }
+    if (!effectiveClassId) {
+      setLocalStudents([]);
+      setLoading(false);
+      return;
     }
 
-    loadStudents();
-    return () => { cancelled = true; };
+    setLoading(true);
+    studentApi.getByClass(effectiveClassId)
+      .then((data) => {
+        setLocalStudents(data || []);
+      })
+      .catch(() => {
+        setLocalStudents([]);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [effectiveClassId]);
 
-  return { students: students || [] };
+  return { students: localStudents, loading };
 }
