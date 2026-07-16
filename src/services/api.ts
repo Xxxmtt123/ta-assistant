@@ -128,47 +128,18 @@ export const photoApi = {
   getDataForDownload: (sessionId: string) => request<Array<{ id: string; studentName: string; studentId: string; type: string; url: string; mimeType: string }>>(`/api/photos/data?sessionId=${sessionId}`),
 };
 
-// ====== AI（DeepSeek）======
-const DEEPSEEK_BASE = 'https://api.deepseek.com/v1';
-const BUILT_IN_API_KEY = 'sk-64e07e9929c24381a5f761a3c19fb7d8';
-const BUILT_IN_MODEL = 'deepseek-chat';
-
-function getAiConfig(): { apiKey: string; modelId: string } {
-  const apiKey = localStorage.getItem('ta_ai_api_key') || BUILT_IN_API_KEY;
-  const modelId = localStorage.getItem('ta_ai_model') || BUILT_IN_MODEL;
-  return { apiKey, modelId };
-}
-
+// ====== AI（通过 Workers/Vercel 代理，API Key 在服务端）======
 export const aiApi = {
   chat: async (messages: Array<{ role: string; content: string }>, options?: { model?: string; temperature?: number; max_tokens?: number }) => {
-    const config = getAiConfig();
-    const model = options?.model || config.modelId;
-
-    const res = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
+    return request<{ content: string; usage: any; model: string }>('/api/ai/chat', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
-      },
       body: JSON.stringify({
-        model,
         messages,
+        model: options?.model,
         temperature: options?.temperature ?? 0.7,
         max_tokens: options?.max_tokens ?? 2048,
       }),
     });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: { message: `HTTP ${res.status}` } }));
-      throw new Error(err.error?.message || `DeepSeek API 错误 (${res.status})`);
-    }
-
-    const data = await res.json();
-    return {
-      content: data.choices?.[0]?.message?.content || '',
-      usage: data.usage || null,
-      model: data.model || model,
-    };
   },
 
   // 流式输出（打字机效果）
@@ -178,27 +149,24 @@ export const aiApi = {
     options?: { model?: string; temperature?: number; max_tokens?: number },
     signal?: AbortSignal,
   ): Promise<string> => {
-    const config = getAiConfig();
-    const model = options?.model || config.modelId;
-
-    return fetch(`${DEEPSEEK_BASE}/chat/completions`, {
+    const token = getToken();
+    return fetch(`${API_BASE}/api/ai/chat/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
-        model,
         messages,
+        model: options?.model,
         temperature: options?.temperature ?? 0.7,
         max_tokens: options?.max_tokens ?? 2048,
-        stream: true,
       }),
       signal,
     }).then(async (res) => {
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: { message: `HTTP ${res.status}` } }));
-        throw new Error(err.error?.message || `DeepSeek API 错误 (${res.status})`);
+        throw new Error(err.error?.message || `AI 服务错误 (${res.status})`);
       }
 
       const reader = res.body!.getReader();
