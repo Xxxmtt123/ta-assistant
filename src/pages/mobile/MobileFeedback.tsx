@@ -53,6 +53,20 @@ export default function MobileFeedback() {
   // 流式生成中当前卡片的滚动引用
   const generatingCardRef = useRef<HTMLDivElement>(null);
 
+  const handleDeleteFeedback = (feedbackId: string) => {
+    if (!window.confirm('确定要删除这条反馈吗？')) return;
+    const newList = feedbackList.filter(f => f.id !== feedbackId);
+    setFeedbackList(newList);
+    if (currentClass) {
+      if (newList.length > 0) {
+        localStorage.setItem(`feedback_list_${currentClass.id}`, JSON.stringify(newList));
+      } else {
+        localStorage.removeItem(`feedback_list_${currentClass.id}`);
+      }
+    }
+    showToast('已删除', 'success');
+  };
+
   // 自动滚动到当前正在生成的卡片
   useEffect(() => {
     if (isGenerating && generatingCardRef.current) {
@@ -70,70 +84,71 @@ export default function MobileFeedback() {
   );
 
   // 同步 studentNotes 跟 students（班级切换时重新初始化）
-  const lastInitClassId = useRef<string | null>(null);
   const isFirstMount = useRef(true);
 
   useEffect(() => {
     const classId = currentClass?.id || '';
     if (!classId || students.length === 0) return;
 
-    if (classId !== lastInitClassId.current) {
-      lastInitClassId.current = classId;
+    // 检查 studentNotes 是否已经对应当前 students（避免旧数据覆盖新班级）
+    const currentNoteIds = studentNotes.map(n => n.studentId).sort().join(',');
+    const currentStudentIds = students.map(s => s.id).sort().join(',');
+    if (currentNoteIds === currentStudentIds) return; // 已匹配，无需重置
 
-      // 尝试从缓存恢复（切换 tab 回来时不重置）
-      if (isFirstMount.current) {
-        isFirstMount.current = false;
-        const cachedNotes = currentSession
-          ? localStorage.getItem(`feedback_notes_${currentSession.id}`)
-          : null;
-        const cachedList = currentClass
-          ? localStorage.getItem(`feedback_list_${currentClass.id}`)
-          : null;
-        const cachedCourse = currentSession
-          ? localStorage.getItem(`feedback_course_${currentSession.id}`)
-          : null;
-        const cachedPrompt = currentSession
-          ? localStorage.getItem(`feedback_prompt_${currentSession.id}`)
-          : null;
+    // 尝试从缓存恢复（只在首次挂载时）
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      const cachedNotes = currentSession
+        ? localStorage.getItem(`feedback_notes_${currentSession.id}`)
+        : null;
+      const cachedList = currentClass
+        ? localStorage.getItem(`feedback_list_${currentClass.id}`)
+        : null;
+      const cachedCourse = currentSession
+        ? localStorage.getItem(`feedback_course_${currentSession.id}`)
+        : null;
+      const cachedPrompt = currentSession
+        ? localStorage.getItem(`feedback_prompt_${currentSession.id}`)
+        : null;
 
-        if (cachedList) {
-          try {
-            const parsed = JSON.parse(cachedList);
-            if (parsed.length > 0) {
-              setFeedbackList(parsed);
-              setViewMode('result');
-            }
-          } catch {}
-        }
-
-        if (cachedCourse) setCourseContent(cachedCourse);
-        if (cachedPrompt) setAdditionalPrompt(cachedPrompt);
-
-        if (cachedNotes) {
-          try {
-            const parsed = JSON.parse(cachedNotes) as StudentNote[];
-            if (parsed.length === students.length) {
-              setStudentNotes(parsed);
-              return; // 有缓存就不重置
-            }
-          } catch {}
-        }
+      if (cachedList) {
+        try {
+          const parsed = JSON.parse(cachedList);
+          if (parsed.length > 0) {
+            setFeedbackList(parsed);
+            setViewMode('result');
+          }
+        } catch {}
       }
 
-      // 真正切换班级时才重置
-      setStudentNotes(students.map(s => ({
-        studentId: s.id,
-        studentName: s.name,
-        performanceNote: '',
-        performanceLevel: 'good',
-      })));
-      setFeedbackList([]);
-      setCourseContent('');
-      setAdditionalPrompt('');
-      setViewMode('setup');
-      setCurrentResultId(null);
-      setStreamingContent({});
+      if (cachedCourse) setCourseContent(cachedCourse);
+      if (cachedPrompt) setAdditionalPrompt(cachedPrompt);
+
+      if (cachedNotes) {
+        try {
+          const parsed = JSON.parse(cachedNotes) as StudentNote[];
+          const parsedIds = parsed.map(n => n.studentId).sort().join(',');
+          if (parsedIds === currentStudentIds) {
+            setStudentNotes(parsed);
+            return; // 缓存匹配当前学生，不重置
+          }
+        } catch {}
+      }
     }
+
+    // 学生列表不匹配，重置
+    setStudentNotes(students.map(s => ({
+      studentId: s.id,
+      studentName: s.name,
+      performanceNote: '',
+      performanceLevel: 'good',
+    })));
+    setFeedbackList([]);
+    setCourseContent('');
+    setAdditionalPrompt('');
+    setViewMode('setup');
+    setCurrentResultId(null);
+    setStreamingContent({});
   }, [currentClass?.id, students]);
 
   // 保存课程内容到 localStorage（按课次缓存）
@@ -536,6 +551,17 @@ export default function MobileFeedback() {
                     )}
                   </div>
                   {statusTag}
+                  {isCompleted && fb && (
+                    <button
+                      onClick={() => handleDeleteFeedback(fb.id)}
+                      style={{
+                        fontSize: 11, color: 'var(--error)', background: 'none', border: 'none',
+                        cursor: 'pointer', padding: '2px 6px', borderRadius: 4,
+                      }}
+                    >
+                      删除
+                    </button>
+                  )}
                 </div>
 
                 {/* 分隔线 */}
@@ -625,6 +651,12 @@ export default function MobileFeedback() {
               navigator.clipboard.writeText(editContent).then(() => showToast('已复制', 'success'));
             }} style={{ flex: 1 }}>
               复制
+            </button>
+            <button className="m-btn m-btn-outline" onClick={() => {
+              const fb = feedbackList.find(f => f.studentId === currentStudent?.id);
+              if (fb) handleDeleteFeedback(fb.id);
+            }} style={{ flex: 1, color: 'var(--error)', borderColor: 'var(--error)' }}>
+              删除
             </button>
           </div>
         </div>
