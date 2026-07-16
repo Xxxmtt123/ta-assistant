@@ -118,7 +118,7 @@ ${Object.entries(LEVEL_TEMPLATES).map(([level, t]) => `- ${level}(${LEVEL_LABELS
 - **绝对禁止**给出课后复习建议、亲子互动建议、具体操作建议
 - 不要使用"差""不好""不行"等负面词汇
 - 不要使用过于笼统的套话
-- 反馈长度控制在150-250字
+- 反馈长度控制在160-270字
 
 请直接输出反馈文本，不要包含标题或编号。`;
 }
@@ -312,7 +312,7 @@ function generateFallback(note: StudentNote, courseContent: string, additionalPr
   const template = levelTemplates[Math.floor(Math.random() * levelTemplates.length)];
   let text = template(n, perf, extra);
 
-  if (text.length < 120) {
+  if (text.length < 160) {
     const shortTails: Record<PerformanceLevel, string[]> = {
       excellent: ['课堂上 consistently 保持优秀状态，真的很棒！', '整体表现让人非常放心，继续保持哟~'],
       good: ['整体状态还不错，继续加油！', '学习态度值得肯定，慢慢会越来越好哒~'],
