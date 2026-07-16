@@ -253,13 +253,15 @@ export default function LoginPage() {
         localStorage.setItem('ta_token', data.token);
         setUser(data.user);
         showToast('注册成功', 'success');
-        navigate('/mobile');
+        window.location.href = '/mobile';
+        return;
       } else {
         const data = await authApi.login(username, password);
         localStorage.setItem('ta_token', data.token);
         setUser(data.user);
         showToast('登录成功', 'success');
-        navigate('/mobile');
+        window.location.href = '/mobile';
+        return;
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '操作失败';
@@ -598,7 +600,7 @@ export default function LoginPage() {
                 setUser({ id: 'dev', username: 'dev', name: '开发测试' });
                 localStorage.setItem('ta_token', 'dev.token.placeholder');
                 showToast('已进入开发模式', 'info');
-                navigate('/mobile');
+                window.location.href = '/mobile';
               }}
               style={{
                 fontSize: 11,
