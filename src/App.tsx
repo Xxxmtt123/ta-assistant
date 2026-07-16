@@ -25,7 +25,7 @@ import DesktopLibrary from '@/pages/desktop/DesktopLibrary';
 import DesktopSettings from '@/pages/desktop/DesktopSettings';
 import DesktopAttendance from '@/pages/desktop/DesktopAttendance';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://ta-assistant-api.2144961248.workers.dev';
+const API_BASE = import.meta.env.PROD ? '' : 'https://ta-assistant-api.2144961248.workers.dev';
 
 export default function App() {
   const { user, setUser, isMobile, setClasses, setStudents } = useAppStore();
