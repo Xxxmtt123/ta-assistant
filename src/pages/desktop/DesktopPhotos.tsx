@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import imageCompression from 'browser-image-compression';
 import JSZip from 'jszip';
 import { useAppStore } from '@/stores/useAppStore';
@@ -6,7 +6,9 @@ import { photoApi } from '@/services/api';
 import type { Photo } from '@/types';
 
 export default function DesktopPhotos() {
-  const { photos, setPhotos, students, currentClass, currentSession, showToast } = useAppStore();
+  const { students, currentClass, currentSession, showToast } = useAppStore();
+  const [apiPhotos, setApiPhotos] = useState<Photo[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<'all' | 'homework' | 'quiz'>('all');
   const [filterStudent, setFilterStudent] = useState<string>('all');
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
@@ -14,23 +16,40 @@ export default function DesktopPhotos() {
   const [isPacking, setIsPacking] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 组件挂载时从 API 获取照片列表
+  // 组件挂载时和 sessionId 变化时从 API 获取照片列表
+  const loadPhotos = useCallback(async () => {
+    const sessionId = currentSession?.id;
+    if (!sessionId) { setLoading(false); return; }
+    try {
+      const data = await photoApi.getBySession(sessionId);
+      setApiPhotos(data || []);
+    } catch {
+      showToast('获取照片列表失败', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentSession?.id, showToast]);
+
+  useEffect(() => { loadPhotos(); }, [loadPhotos]);
+
+  // 自动同步新照片
   useEffect(() => {
-    const sessionId = currentSession?.id || 'current';
-    photoApi
-      .getBySession(sessionId)
-      .then((apiPhotos) => {
-        const currentPhotos = useAppStore.getState().photos;
-        const existingIds = new Set(currentPhotos.map((p) => p.id));
-        const newPhotos = apiPhotos.filter((p) => !existingIds.has(p.id));
-        if (newPhotos.length > 0) {
-          setPhotos([...currentPhotos, ...newPhotos]);
+    const timer = setInterval(async () => {
+      try {
+        const recentPhotos = await photoApi.getRecent(currentClass?.id);
+        if (recentPhotos && recentPhotos.length > 0) {
+          const existingIds = new Set(apiPhotos.map(p => p.id));
+          const newPhotos = recentPhotos.filter(p => !existingIds.has(p.id));
+          if (newPhotos.length > 0) {
+            setApiPhotos(prev => [...newPhotos, ...prev]);
+            showToast(`同步了 ${newPhotos.length} 张新照片`, 'success');
+          }
         }
-      })
-      .catch(() => {
-        showToast('获取照片列表失败', 'error');
-      });
-  }, [currentSession?.id, setPhotos, showToast]);
+      } catch { /* 静默失败 */ }
+    }, 15000);
+
+    return () => clearInterval(timer);
+  }, [apiPhotos, currentClass?.id, showToast]);
 
   // 学生姓名从 store.students 匹配获取
   const getStudentName = (studentId: string) => {
@@ -45,14 +64,14 @@ export default function DesktopPhotos() {
   };
 
   // 筛选器从真实数据生成
-  const filtered = photos.filter((p) => {
+  const filtered = apiPhotos.filter((p) => {
     if (filterType !== 'all' && p.type !== filterType) return false;
     if (filterStudent !== 'all' && p.studentId !== filterStudent) return false;
     return true;
   });
 
   // 学生筛选列表：仅显示有照片的学生
-  const uniqueStudents = students.filter((s) => photos.some((p) => p.studentId === s.id));
+  const uniqueStudents = students.filter((s) => apiPhotos.some((p) => p.studentId === s.id));
 
   const typeIcon = (type: string) => (type === 'homework' ? '📝' : '📋');
 
@@ -104,7 +123,7 @@ export default function DesktopPhotos() {
           createdAt: new Date().toISOString(),
           synced: true,
         };
-        setPhotos([...useAppStore.getState().photos, newPhoto]);
+        setApiPhotos(prev => [...prev, newPhoto]);
       } catch {
         showToast(`${file.name} 上传失败`, 'error');
       }
@@ -167,7 +186,30 @@ export default function DesktopPhotos() {
   };
 
   // store 中无数据时显示空状态提示
-  if (photos.length === 0) {
+  if (loading) {
+    return (
+      <div>
+        {/* 面包屑 */}
+        <div className="page-breadcrumb">首页 / <span>照片管理</span></div>
+
+        {/* 页面标题 */}
+        <div className="page-title-bar">
+          <h2>照片管理</h2>
+          <div className="actions">
+            <span className="tag tag-primary">加载中...</span>
+          </div>
+        </div>
+
+        <div className="d-panel">
+          <div className="d-panel-body" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}>⏳</div>
+            <p style={{ fontSize: '14px', marginBottom: '8px' }}>加载照片中...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (apiPhotos.length === 0) {
     return (
       <div>
         {/* 面包屑 */}
@@ -234,6 +276,9 @@ export default function DesktopPhotos() {
         </select>
         <button className="d-btn d-btn-primary" onClick={() => fileInputRef.current?.click()}>
           上传照片
+        </button>
+        <button className="d-btn d-btn-ghost" onClick={loadPhotos}>
+          🔄 刷新
         </button>
         <button
           className="d-btn d-btn-ghost"
@@ -396,6 +441,20 @@ export default function DesktopPhotos() {
                   style={{ flex: 1 }}
                 >
                   推送到网站
+                </button>
+                <button
+                  onClick={() => {
+                    if (!window.confirm('确定要删除这张照片吗？')) return;
+                    photoApi.delete(selectedPhoto.id).then(() => {
+                      setApiPhotos(prev => prev.filter(p => p.id !== selectedPhoto.id));
+                      showToast('照片已删除', 'success');
+                      setSelectedPhoto(null);
+                    }).catch(() => showToast('删除失败', 'error'));
+                  }}
+                  className="d-btn d-btn-ghost"
+                  style={{ flex: 1, color: 'var(--error)' }}
+                >
+                  删除照片
                 </button>
               </div>
             </div>
