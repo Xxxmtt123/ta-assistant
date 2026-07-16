@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
+import { useStudents } from '@/hooks/useStudents';
 import { feedbackApi } from '@/services/api';
 import { exportToCsv } from '@/utils/csv';
 import {
@@ -42,7 +43,9 @@ const demoFeedbacks: Feedback[] = [];
 type ViewMode = 'setup' | 'notes' | 'result';
 
 export default function DesktopFeedback() {
-  const { students, feedbackList, setFeedbackList, showToast, currentSession, currentClass } = useAppStore();
+  const { students: hookStudents } = useStudents();
+  const { feedbackList, setFeedbackList, showToast, currentSession, currentClass, students: storeStudents } = useAppStore();
+  const students = hookStudents.length > 0 ? hookStudents : storeStudents;
   const [viewMode, setViewMode] = useState<ViewMode>('setup');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
