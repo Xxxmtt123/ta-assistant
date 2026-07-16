@@ -3,96 +3,121 @@ import { getSupabaseClient } from '../index';
 import { verifyAuth } from '../middleware/auth';
 
 export async function handleAuth(request: Request, env: Env) {
-  const url = new URL(request.url);
-  const method = request.method;
+  try {
+    const url = new URL(request.url);
+    const method = request.method;
 
-  if (url.pathname === '/api/auth/register' && method === 'POST') {
-    const { username, password, name } = await request.json() as { username: string; password: string; name: string };
-
-    if (!username || !password) {
-      return new Response(JSON.stringify({ error: '用户名和密码不能为空' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    // 辅助函数：安全解析 JSON body
+    async function safeJsonBody(): Promise<any> {
+      try {
+        const body = await request.json();
+        return body;
+      } catch (e) {
+        return null;
+      }
     }
 
-    const supabase = getSupabaseClient(env);
+    if (url.pathname === '/api/auth/register' && method === 'POST') {
+      const body = await safeJsonBody();
+      if (!body) {
+        return new Response(JSON.stringify({ error: '请求体格式错误' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      const { username, password, name } = body as { username: string; password: string; name: string };
 
-    // 检查用户名是否已存在
-    const { data: existing } = await supabase
-      .from('users')
-      .select('id')
-      .eq('username', username)
-      .single();
+      if (!username || !password) {
+        return new Response(JSON.stringify({ error: '用户名和密码不能为空' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
 
-    if (existing) {
-      return new Response(JSON.stringify({ error: '用户名已存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      const supabase = getSupabaseClient(env);
+
+      // 检查用户名是否已存在
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', username)
+        .single();
+
+      if (existing) {
+        return new Response(JSON.stringify({ error: '用户名已存在' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // 密码哈希（Workers 环境用 Web Crypto API）
+      const passwordHash = await hashPassword(password);
+
+      // 插入用户
+      const { data: user, error } = await supabase
+        .from('users')
+        .insert({ username, password_hash: passwordHash, name })
+        .select('id, username, name')
+        .single();
+
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // 生成 JWT
+      const token = await createJWT(user.id, env);
+
+      return new Response(JSON.stringify({ token, user }), { headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 密码哈希（Workers 环境用 Web Crypto API）
-    const passwordHash = await hashPassword(password);
+    if (url.pathname === '/api/auth/login' && method === 'POST') {
+      const body = await safeJsonBody();
+      if (!body) {
+        return new Response(JSON.stringify({ error: '请求体格式错误' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      const { username, password } = body as { username: string; password: string };
 
-    // 插入用户
-    const { data: user, error } = await supabase
-      .from('users')
-      .insert({ username, password_hash: passwordHash, name })
-      .select('id, username, name')
-      .single();
+      const supabase = getSupabaseClient(env);
+      const { data: user } = await supabase
+        .from('users')
+        .select('id, username, name, password_hash')
+        .eq('username', username)
+        .single();
 
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+      if (!user) {
+        return new Response(JSON.stringify({ error: '用户名或密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // 验证密码
+      const valid = await verifyPassword(password, user.password_hash);
+      if (!valid) {
+        return new Response(JSON.stringify({ error: '用户名或密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      const token = await createJWT(user.id, env);
+
+      return new Response(JSON.stringify({
+        token,
+        user: { id: user.id, username: user.username, name: user.name },
+      }), { headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 生成 JWT
-    const token = await createJWT(user.id, env);
+    // GET /api/auth/me — 用 JWT 获取当前用户信息
+    if (url.pathname === '/api/auth/me' && method === 'GET') {
+      const auth = await verifyAuth(request, env);
+      if (!auth) {
+        return new Response(JSON.stringify({ error: '请先登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+      const supabase = getSupabaseClient(env);
+      const { data: user } = await supabase
+        .from('users')
+        .select('id, username, name')
+        .eq('id', auth.userId)
+        .single();
+      if (!user) {
+        return new Response(JSON.stringify({ error: '用户不存在' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify(user), { headers: { 'Content-Type': 'application/json' } });
+    }
 
-    return new Response(JSON.stringify({ token, user }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: '处理请求时出错', detail: e.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-
-  if (url.pathname === '/api/auth/login' && method === 'POST') {
-    const { username, password } = await request.json() as { username: string; password: string };
-
-    const supabase = getSupabaseClient(env);
-    const { data: user } = await supabase
-      .from('users')
-      .select('id, username, name, password_hash')
-      .eq('username', username)
-      .single();
-
-    if (!user) {
-      return new Response(JSON.stringify({ error: '用户名或密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-    }
-
-    // 验证密码
-    const valid = await verifyPassword(password, user.password_hash);
-    if (!valid) {
-      return new Response(JSON.stringify({ error: '用户名或密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-    }
-
-    const token = await createJWT(user.id, env);
-
-    return new Response(JSON.stringify({
-      token,
-      user: { id: user.id, username: user.username, name: user.name },
-    }), { headers: { 'Content-Type': 'application/json' } });
-  }
-
-  // GET /api/auth/me — 用 JWT 获取当前用户信息
-  if (url.pathname === '/api/auth/me' && method === 'GET') {
-    const auth = await verifyAuth(request, env);
-    if (!auth) {
-      return new Response(JSON.stringify({ error: '请先登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-    }
-    const supabase = getSupabaseClient(env);
-    const { data: user } = await supabase
-      .from('users')
-      .select('id, username, name')
-      .eq('id', auth.userId)
-      .single();
-    if (!user) {
-      return new Response(JSON.stringify({ error: '用户不存在' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
-    }
-    return new Response(JSON.stringify(user), { headers: { 'Content-Type': 'application/json' } });
-  }
-
-  return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
 }
 
 // 密码哈希（SHA-256）
