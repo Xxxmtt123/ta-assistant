@@ -122,7 +122,7 @@ export async function handlePhotos(request: Request, env: Env) {
     // 查询照片元数据
     const { data: results, error } = await supabase
       .from('photos')
-      .select('id, student_id, session_id, type, url, mime_type, width, height, created_at')
+      .select('id, student_id, session_id, type, url, mime_type, width, height, path, created_at')
       .eq('session_id', sessionId);
 
     if (error) {
@@ -155,11 +155,103 @@ export async function handlePhotos(request: Request, env: Env) {
       url: r.url || '',
       width: r.width || 0,
       height: r.height || 0,
+      path: r.path || '',
       createdAt: r.created_at,
       studentName: studentMap[r.student_id] || '未知学生',
     }));
 
     return new Response(JSON.stringify(photos), { headers: { 'Content-Type': 'application/json' } });
+  }
+
+  // ====== 删除单张照片 DELETE /api/photos/:id ======
+  if (url.pathname.match(/^\/api\/photos\/[\w-]+$/) && method === 'DELETE') {
+    const photoId = url.pathname.split('/').pop();
+
+    // 先获取照片记录（需要 path 字段来删除 Storage 文件）
+    const { data: photo, error: fetchError } = await supabase
+      .from('photos')
+      .select('id, path')
+      .eq('id', photoId)
+      .single();
+
+    if (fetchError || !photo) {
+      return new Response(JSON.stringify({ error: '照片不存在' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // 删除 Storage 文件
+    if (photo.path) {
+      await supabase.storage.from('photos').remove([photo.path]);
+    }
+
+    // 删除数据库记录
+    const { error: deleteError } = await supabase
+      .from('photos')
+      .delete()
+      .eq('id', photoId);
+
+    if (deleteError) {
+      return new Response(JSON.stringify({ error: deleteError.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+  }
+
+  // ====== 获取最近照片（用于实时同步） GET /api/photos/recent?classId=xxx ======
+  if (url.pathname === '/api/photos/recent' && method === 'GET') {
+    const classId = url.searchParams.get('classId');
+    const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
+    let sessionIds: string[] = [];
+    if (classId) {
+      const { data: sessions } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('class_id', classId);
+      sessionIds = (sessions || []).map((s: any) => s.id);
+    }
+
+    let query = supabase
+      .from('photos')
+      .select('id, student_id, session_id, type, url, mime_type, width, height, created_at')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false });
+
+    if (sessionIds.length > 0) {
+      query = query.in('session_id', sessionIds);
+    }
+
+    const { data: results, error } = await query;
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // 批量查学生姓名
+    const recentStudentIds = [...new Set((results || []).map((r: any) => r.student_id))];
+    const recentStudentMap: Record<string, string> = {};
+    if (recentStudentIds.length > 0) {
+      const { data: studentResults } = await supabase
+        .from('students')
+        .select('id, name')
+        .in('id', recentStudentIds);
+      for (const row of (studentResults || []) as any[]) {
+        recentStudentMap[row.id] = row.name;
+      }
+    }
+
+    const recentPhotos = (results || []).map((r: any) => ({
+      id: r.id,
+      studentId: r.student_id,
+      sessionId: r.session_id,
+      type: r.type,
+      thumbnailUrl: r.url || '',
+      url: r.url || '',
+      width: r.width || 0,
+      height: r.height || 0,
+      createdAt: r.created_at,
+      studentName: recentStudentMap[r.student_id] || '未知学生',
+    }));
+
+    return new Response(JSON.stringify(recentPhotos), { headers: { 'Content-Type': 'application/json' } });
   }
 
   // ====== 获取照片数据用于前端打包下载 GET /api/photos/data?sessionId=xxx ======
