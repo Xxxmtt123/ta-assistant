@@ -11,8 +11,8 @@ import { handleAiProxy } from './routes/ai';
 export interface Env {
   SUPABASE_URL: string;
   SUPABASE_KEY: string;
-  DOUBAO_API_KEY: string;
-  DOUBAO_MODEL_ID: string;
+  DEEPSEEK_API_KEY: string;
+  DEEPSEEK_MODEL_ID: string;
 }
 
 // 创建 Supabase 客户端的辅助函数
